@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, useCallback } from 'react'
+import { useEffect, useId, useMemo, useState, useCallback, useRef } from 'react'
 import { PLAYERS, COMBOS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, expenseTypeValueFromLabel, normalizeExpenseTypeLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
 
 function PeoplePicker({ selected, onToggle, names, onAddName }) {
@@ -404,6 +404,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
 
 export default function SessionForm({ session, names, expenseTypes, onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
   const [date, setDate] = useState(session.date || new Date().toISOString().split('T')[0])
+  const dateInputId = useId()
   const [entries, setEntries] = useState(session.entries || [])
   const [editingEntry, setEditingEntry] = useState(null)
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false)
@@ -444,18 +445,114 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
     [entries, names]
   )
 
+  const sortedEntries = useMemo(() => {
+    const orderMap = sortExpenseTypes(expenseTypes || []).reduce((m, t, i) => {
+      m[t.value] = i
+      return m
+    }, {})
+
+    return [...entries].sort((a, b) => {
+      const ia = orderMap[a.type] ?? 9999
+      const ib = orderMap[b.type] ?? 9999
+      if (ia !== ib) return ia - ib
+      return String(getEntryLabel(a, expenseTypes)).localeCompare(String(getEntryLabel(b, expenseTypes)), 'vi', { sensitivity: 'base' })
+    })
+  }, [entries, expenseTypes])
+
+  function formatDisplayDate(iso) {
+    if (!iso) return ''
+    try {
+      const [y, m, d] = String(iso).split('-')
+      if (!d || !m || !y) return iso
+      // const yy = String(y).slice(2)
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
+    } catch (e) {
+      return iso
+    }
+  }
+
+  function DateField({ id, value, onChange }) {
+    const inputRef = useRef(null)
+
+    const openPicker = () => {
+      const el = inputRef.current
+      if (!el) return
+      // Prefer showPicker() if available (Chromium)
+      if (typeof el.showPicker === 'function') {
+        try {
+          el.showPicker()
+          return
+        } catch (e) {
+          // ignore and fallback to focus
+        }
+      }
+      // Fallback to focus which should open picker on most browsers
+      try {
+        el.focus()
+        // For some browsers, sending a click helps
+        el.click()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    return (
+      <div className="form-group" style={{ position: 'relative', display: 'inline-block' }}>
+        <label htmlFor={id} style={{ display: 'block', cursor: 'pointer' }}>Ngày đánh</label>
+        <div
+          onClick={openPicker}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker() } }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            border: '1px solid var(--surface-weak)',
+            background: 'var(--bg-surface)',
+            minWidth: '160px',
+            cursor: 'pointer',
+            position: 'relative',
+          }}
+        >
+          <span style={{ fontSize: '0.95rem' }}>{formatDisplayDate(value) || 'Chọn ngày'}</span>
+          <span style={{ marginLeft: 'auto', opacity: 0.7 }}>📅</span>
+
+          <input
+            ref={inputRef}
+            id={id}
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              opacity: 0,
+              border: 'none',
+              padding: 0,
+              margin: 0,
+              cursor: 'pointer',
+              zIndex: 3,
+              background: 'transparent',
+              WebkitAppearance: 'none',
+              MozAppearance: 'none',
+            }}
+            aria-label="Chọn ngày"
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="card">
         <div className="card-title">📅 Phiên đánh cầu</div>
-        <div className="form-group">
-          <label>Ngày đánh</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
+        <DateField id={dateInputId} value={date} onChange={setDate} />
       </div>
 
       <div className="card">
@@ -489,7 +586,7 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
                   </td>
                 </tr>
               ) : (
-                entries.map((entry) => {
+                sortedEntries.map((entry) => {
                   const perPerson = entry.amount / entry.people.length
                   return (
                     <tr

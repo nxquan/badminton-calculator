@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames } from '../constants'
+import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
 
 export default function SessionResult({ session, expenseTypes, onBack, onUpdateSession, onEditSession }) {
   const totals = calculateTotals(session.entries)
@@ -61,7 +61,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
           ← Quay lại
         </button>
         {canEditSession && (
-          <button className="btn btn-primary" onClick={() => onEditSession?.(session)}>
+          <button className="btn btn-primary" style={{ marginLeft: 20 }} onClick={() => onEditSession?.(session)}>
             ✎ Chỉnh sửa phiên
           </button>
         )}
@@ -104,28 +104,42 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 </tr>
               </thead>
               <tbody>
-                {session.entries.map((entry) => {
-                  const perPerson = entry.amount / entry.people.length
-                  return (
-                    <tr key={entry.id}>
-                      <td>
-                        <span className={`type-badge ${entry.type}`}>
-                          {getEntryLabel(entry, expenseTypes)}
-                        </span>
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{entry.payer || 'Trí'}</td>
-                      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
-                        {formatMoney(entry.amount * 1000)}
-                      </td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        {sortPlayerNames(entry.people).join(', ')}
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 500, fontSize: '0.8rem' }}>
-                        {formatMoney(Math.round(perPerson * 1000))}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {useMemo(() => {
+                  const orderMap = sortExpenseTypes(expenseTypes || []).reduce((m, t, i) => {
+                    m[t.value] = i
+                    return m
+                  }, {})
+
+                  const sorted = [...(session.entries || [])].sort((a, b) => {
+                    const ia = orderMap[a.type] ?? 9999
+                    const ib = orderMap[b.type] ?? 9999
+                    if (ia !== ib) return ia - ib
+                    return String(getEntryLabel(a, expenseTypes)).localeCompare(String(getEntryLabel(b, expenseTypes)), 'vi', { sensitivity: 'base' })
+                  })
+
+                  return sorted.map((entry) => {
+                    const perPerson = entry.amount / entry.people.length
+                    return (
+                      <tr key={entry.id}>
+                        <td>
+                          <span className={`type-badge ${entry.type}`}>
+                            {getEntryLabel(entry, expenseTypes)}
+                          </span>
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{entry.payer || 'Trí'}</td>
+                        <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                          {formatMoney(entry.amount * 1000)}
+                        </td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          {sortPlayerNames(entry.people).join(', ')}
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 500, fontSize: '0.8rem' }}>
+                          {formatMoney(Math.round(perPerson * 1000))}
+                        </td>
+                      </tr>
+                    )
+                  })
+                }, [session.entries, expenseTypes])}
               </tbody>
             </table>
           </div>

@@ -222,7 +222,7 @@ export default function App() {
           {dbStatus === 'error'   && <span className="db-badge db-error">🔴 Lỗi kết nối DB</span>}
           <div>
             <i className="github-icon" style={{ marginTop: 20 }}>🐙 </i>
-            Contribution: <a style={{color: 'black'}} href="https://github.com/nxquan/badminton-calculator" target="_blank" rel="noopener noreferrer">nxquan/badminton-calculator</a>
+            Contribution: <a style={{color: 'black'}} href="https://github.com/nxquan/badminton-calculator" target="_blank" rel="noopener noreferrer">badminton-calculator</a>
           </div>
         </header>
       )}
