@@ -18,20 +18,35 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     [participants, settledPlayers]
   )
 
+  // Persist `transferTo` per session in localStorage so user's choice isn't reset
   useEffect(() => {
+    const key = `session.transferTo.${session.id}`
+    // Priority: session.transferTo (from DB) -> localStorage -> default participant
+    if (session.transferTo && participants.includes(session.transferTo)) {
+      setTransferTo(session.transferTo)
+      return
+    }
+
+    try {
+      const stored = localStorage.getItem(key)
+      if (stored && participants.includes(stored)) {
+        setTransferTo(stored)
+        return
+      }
+    } catch (e) {
+      // ignore
+    }
+
     setTransferTo(participants[0] || '')
-  }, [session.id])
+  }, [session.id, participants])
 
   useEffect(() => {
     if (!participants.length) {
       setTransferTo('')
-      return
-    }
-
-    if (!transferTo || !participants.includes(transferTo)) {
+    } else if (transferTo && !participants.includes(transferTo)) {
       setTransferTo(participants[0])
     }
-  }, [participants, transferTo])
+  }, [participants])
 
   const handleToggleSettled = (name) => {
     const nextSettled = settledPlayers.includes(name)
@@ -47,12 +62,39 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     }
   }
 
+  const handleSetTransferTo = (name) => {
+    setTransferTo(name)
+    try {
+      localStorage.setItem(`session.transferTo.${session.id}`, name)
+    } catch (e) {
+      // ignore
+    }
+
+    if (onUpdateSession) {
+      onUpdateSession({ ...session, transferTo: name })
+    }
+  }
+
   const formattedDate = new Date(session.date).toLocaleDateString('vi-VN', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   })
+
+  const sortedEntries = useMemo(() => {
+    const orderMap = sortExpenseTypes(expenseTypes || []).reduce((m, t, i) => {
+      m[t.value] = i
+      return m
+    }, {})
+
+    return [...(session.entries || [])].sort((a, b) => {
+      const ia = orderMap[a.type] ?? 9999
+      const ib = orderMap[b.type] ?? 9999
+      if (ia !== ib) return ia - ib
+      return String(getEntryLabel(a, expenseTypes)).localeCompare(String(getEntryLabel(b, expenseTypes)), 'vi', { sensitivity: 'base' })
+    })
+  }, [session.entries, expenseTypes])
 
   return (
     <div>
@@ -104,42 +146,28 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 </tr>
               </thead>
               <tbody>
-                {useMemo(() => {
-                  const orderMap = sortExpenseTypes(expenseTypes || []).reduce((m, t, i) => {
-                    m[t.value] = i
-                    return m
-                  }, {})
-
-                  const sorted = [...(session.entries || [])].sort((a, b) => {
-                    const ia = orderMap[a.type] ?? 9999
-                    const ib = orderMap[b.type] ?? 9999
-                    if (ia !== ib) return ia - ib
-                    return String(getEntryLabel(a, expenseTypes)).localeCompare(String(getEntryLabel(b, expenseTypes)), 'vi', { sensitivity: 'base' })
-                  })
-
-                  return sorted.map((entry) => {
-                    const perPerson = entry.amount / entry.people.length
-                    return (
-                      <tr key={entry.id}>
-                        <td>
-                          <span className={`type-badge ${entry.type}`}>
-                            {getEntryLabel(entry, expenseTypes)}
-                          </span>
-                        </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>{entry.payer || 'Trí'}</td>
-                        <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
-                          {formatMoney(entry.amount * 1000)}
-                        </td>
-                        <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                          {sortPlayerNames(entry.people).join(', ')}
-                        </td>
-                        <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 500, fontSize: '0.8rem' }}>
-                          {formatMoney(Math.round(perPerson * 1000))}
-                        </td>
-                      </tr>
-                    )
-                  })
-                }, [session.entries, expenseTypes])}
+                {sortedEntries.map((entry) => {
+                  const perPerson = entry.amount / entry.people.length
+                  return (
+                    <tr key={entry.id}>
+                      <td>
+                        <span className={`type-badge ${entry.type}`}>
+                          {getEntryLabel(entry, expenseTypes)}
+                        </span>
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{entry.payer || 'Trí'}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                        {formatMoney(entry.amount * 1000)}
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {sortPlayerNames(entry.people).join(', ')}
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 500, fontSize: '0.8rem' }}>
+                        {formatMoney(Math.round(perPerson * 1000))}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -168,7 +196,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                   key={name}
                   type="button"
                   className={`people-chip ${transferTo === name ? 'selected' : ''}`}
-                  onClick={() => setTransferTo(name)}
+                  onClick={() => handleSetTransferTo(name)}
                 >
                   {name}
                 </button>
