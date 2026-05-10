@@ -61,11 +61,12 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
             <table className="result-table history-table">
               <thead>
                 <tr>
-                  <th>Ngày</th>
-                  <th>Người</th>
-                  <th>Chi tiết</th>
-                  <th>Tổng</th>
-                  <th></th>
+                  <th style={{textAlign: 'center'}}>Ngày</th>
+                  <th style={{textAlign: 'center'}}>Người</th>
+                  <th style={{textAlign: 'center'}}>Số giờ CL</th>
+                  <th style={{textAlign: 'center'}}>Chi tiết</th>
+                  <th style={{textAlign: 'center'}}>Tổng</th>
+                  <th style={{textAlign: 'center'}}></th>
                 </tr>
               </thead>
               <tbody>
@@ -73,6 +74,11 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                   const totals = calculateTotals(session.entries)
                   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
                   const playerCount = new Set(session.entries.flatMap((e) => e.people)).size
+                  
+                  // Calculate total hours
+                  const totalHours = session.entries
+                    .filter((e) => e.hours && e.hours > 0)
+                    .reduce((sum, e) => sum + e.hours, 0)
 
                   const formattedDate = new Date(session.date).toLocaleDateString('vi-VN', {
                     weekday: 'long',
@@ -91,10 +97,16 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                     >
                       <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formattedDate}</td>
                       <td>{playerCount}</td>
+                      <td style={{ textAlign: 'center' }}>{totalHours > 0 ? `${totalHours}h` : '-'}</td>
                       <td>
                         <span className="history-details">{details}</span>
                       </td>
-                      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                      <td style={{ 
+                        whiteSpace: 'nowrap', 
+                        fontWeight: 600,
+                        color: grandTotal > 1000 ? '#ef4444' : 'inherit',
+                        borderRadius: grandTotal > 1000 ? '4px' : 'inherit'
+                      }}>
                         {formatMoney(Math.round(grandTotal * 1000))}
                       </td>
                       <td>
