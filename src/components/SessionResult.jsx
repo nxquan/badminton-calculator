@@ -96,6 +96,30 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     })
   }, [session.entries, expenseTypes])
 
+  // Calculate breakdown by expense type for each person
+  const expenseTypeBreakdown = useMemo(() => {
+    const breakdown = {}
+    for (const entry of session.entries || []) {
+      if (!breakdown[entry.type]) breakdown[entry.type] = {}
+      const perPerson = entry.amount / entry.people.length
+      for (const person of entry.people) {
+        if (!breakdown[entry.type][person]) breakdown[entry.type][person] = 0
+        breakdown[entry.type][person] += perPerson
+      }
+    }
+    return breakdown
+  }, [session.entries])
+
+  // Get all unique expense types sorted
+  const allExpenseTypes = useMemo(() => {
+    const typeSet = new Set(session.entries?.map(e => e.type) || [])
+    const typeArray = [...typeSet].map(type => {
+      const found = expenseTypes?.find(t => t.value === type)
+      return found || { value: type, label: type, emoji: '' }
+    })
+    return sortExpenseTypes(typeArray)
+  }, [session.entries, expenseTypes])
+
   return (
     <div>
       <div className="result-top-actions">
@@ -209,6 +233,11 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               <tr>
                 <th>Người chơi</th>
                 <th>Phải trả</th>
+                {allExpenseTypes.map((type) => (
+                  <th key={type.value} style={{ fontSize: '0.9rem' }}>
+                    {type.emoji} {type.label}
+                  </th>
+                ))}
                 {transferTo && <th>Chuyển cho {transferTo}</th>}
                 <th>Trạng thái</th>
                 <th>Đánh dấu</th>
@@ -236,6 +265,14 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                         ) : null}
                       </td>
                       <td>{formatMoney(Math.round(amount * 1000))}</td>
+                      {allExpenseTypes.map((type) => {
+                        const typeAmount = expenseTypeBreakdown[type.value]?.[name] || 0
+                        return (
+                          <td key={type.value} style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                            {typeAmount > 0 ? formatMoney(Math.round(typeAmount * 1000)) : '-'}
+                          </td>
+                        )
+                      })}
                       {transferTo && (
                         <td>
                           {name === transferTo ? (
@@ -287,6 +324,14 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               <tr className="result-total">
                 <td>Tổng cộng</td>
                 <td>{formatMoney(Math.round(grandTotal * 1000))}</td>
+                {allExpenseTypes.map((type) => {
+                  const typeTotal = Object.values(expenseTypeBreakdown[type.value] || {}).reduce((s, v) => s + v, 0)
+                  return (
+                    <td key={type.value} style={{ fontWeight: 600 }}>
+                      {formatMoney(Math.round(typeTotal * 1000))}
+                    </td>
+                  )
+                })}
                 {transferTo && <td />}
                 <td />
                 <td />

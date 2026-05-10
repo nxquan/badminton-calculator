@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { formatMoney, sortPlayerNames } from '../constants'
+import { formatMoney, sortPlayerNames, sortExpenseTypes } from '../constants'
 
-function calcStats(sessions) {
+function calcStats(sessions, expenseTypes = []) {
   const stats = {}
 
   for (const session of sessions) {
@@ -9,12 +9,9 @@ function calcStats(sessions) {
       if (!entry.people || entry.people.length === 0 || entry.amount <= 0) continue
       const perPerson = entry.amount / entry.people.length
       for (const person of entry.people) {
-        if (!stats[person]) stats[person] = { sport: 0, food: 0 }
-        if (entry.type === 'com') {
-          stats[person].food += perPerson
-        } else {
-          stats[person].sport += perPerson
-        }
+        if (!stats[person]) stats[person] = {}
+        if (!stats[person][entry.type]) stats[person][entry.type] = 0
+        stats[person][entry.type] += perPerson
       }
     }
   }
@@ -35,13 +32,13 @@ function formatMonth(ym) {
 }
 
 function getMonthlyRank(index) {
-  if (index === 0) return { icon: '💎', label: 'Kim cương', className: 'rank-diamond' }
-  if (index === 1) return { icon: '🥇', label: 'Vàng', className: 'rank-gold' }
-  if (index === 2) return { icon: '🥈', label: 'Bạc', className: 'rank-silver' }
+  if (index === 0) return { icon: '💎', label: '', className: 'rank-diamond' }
+  if (index === 1) return { icon: '🥇', label: '', className: 'rank-gold' }
+  if (index === 2) return { icon: '🥈', label: '', className: 'rank-silver' }
   return null
 }
 
-export default function Stats({ sessions }) {
+export default function Stats({ sessions, expenseTypes = [] }) {
   const [filterType, setFilterType] = useState('month')
   const [filterValue, setFilterValue] = useState('')
   const isMonthlyView = filterType === 'month'
@@ -55,19 +52,44 @@ export default function Stats({ sessions }) {
     return sessions
   }, [sessions, filterType, filterValue])
 
-  const stats = useMemo(() => calcStats(filteredSessions), [filteredSessions])
+  const stats = useMemo(() => calcStats(filteredSessions, expenseTypes), [filteredSessions, expenseTypes])
+
+  // Get all expense types used in filtered sessions
+  const usedExpenseTypes = useMemo(() => {
+    const typeSet = new Set()
+    for (const session of filteredSessions) {
+      for (const entry of session.entries || []) {
+        typeSet.add(entry.type)
+      }
+    }
+    const typeArray = [...typeSet].map(type => {
+      const found = expenseTypes.find(t => t.value === type)
+      return found || { value: type, label: type, emoji: '' }
+    })
+    return sortExpenseTypes(typeArray)
+  }, [filteredSessions, expenseTypes])
 
   const rows = sortPlayerNames(Object.keys(stats))
-    .map((name) => ({
-      name,
-      sport: stats[name].sport,
-      food: stats[name].food,
-      total: stats[name].sport + stats[name].food,
-    }))
+    .map((name) => {
+      const totals = { ...stats[name] }
+      const total = Object.values(totals).reduce((s, v) => s + v, 0)
+      return {
+        name,
+        totals,
+        total,
+      }
+    })
     .sort((a, b) => b.total - a.total)
 
-  const sumSport = rows.reduce((s, r) => s + r.sport, 0)
-  const sumFood = rows.reduce((s, r) => s + r.food, 0)
+  // Calculate column sums for each expense type
+  const columnSums = useMemo(() => {
+    const sums = {}
+    for (const type of usedExpenseTypes) {
+      sums[type.value] = rows.reduce((s, r) => s + (r.totals[type.value] || 0), 0)
+    }
+    return sums
+  }, [rows, usedExpenseTypes])
+
   const sumTotal = rows.reduce((s, r) => s + r.total, 0)
 
   const sessionCount = filteredSessions.length
@@ -139,8 +161,11 @@ export default function Stats({ sessions }) {
                 <tr>
                   <th>#</th>
                   <th>Thành viên</th>
-                  <th>🏸 Cầu lông</th>
-                  <th>🍚 Tiền ăn</th>
+                  {usedExpenseTypes.map((type) => (
+                    <th key={type.value} style={{ fontSize: '0.9rem' }}>
+                      {type.emoji} {type.label}
+                    </th>
+                  ))}
                   <th>Tổng</th>
                 </tr>
               </thead>
@@ -158,8 +183,14 @@ export default function Stats({ sessions }) {
                           </span>
                         )}
                       </td>
-                      <td>{formatMoney(Math.round(row.sport * 1000))}</td>
-                      <td>{row.food > 0 ? formatMoney(Math.round(row.food * 1000)) : <span style={{ color: 'var(--text-secondary)' }}>—</span>}</td>
+                      {usedExpenseTypes.map((type) => {
+                        const amount = row.totals[type.value] || 0
+                        return (
+                          <td key={type.value}>
+                            {amount > 0 ? formatMoney(Math.round(amount * 1000)) : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+                          </td>
+                        )
+                      })}
                       <td className={`stats-total-cell ${rankInfo ? `stats-total-${rankInfo.className}` : ''}`}>
                         {formatMoney(Math.round(row.total * 1000))}
                       </td>
@@ -168,8 +199,11 @@ export default function Stats({ sessions }) {
                 })}
                 <tr className="result-total">
                   <td colSpan={2}>Tổng cộng</td>
-                  <td>{formatMoney(Math.round(sumSport * 1000))}</td>
-                  <td>{formatMoney(Math.round(sumFood * 1000))}</td>
+                  {usedExpenseTypes.map((type) => (
+                    <td key={type.value}>
+                      {formatMoney(Math.round(columnSums[type.value] * 1000))}
+                    </td>
+                  ))}
                   <td>{formatMoney(Math.round(sumTotal * 1000))}</td>
                 </tr>
               </tbody>

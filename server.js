@@ -167,6 +167,93 @@ app.post('/api/sessions/bulk', async (req, res) => {
   }
 })
 
+// Cập nhật tên người chơi
+app.put('/api/players/:name', async (req, res) => {
+  try {
+    const oldName = req.params.name
+    const { name: newName } = req.body
+    
+    if (!newName || typeof newName !== 'string') {
+      return res.status(400).json({ error: 'Tên mới không hợp lệ' })
+    }
+
+    const newNameTrimmed = newName.trim()
+    if (!newNameTrimmed) {
+      return res.status(400).json({ error: 'Tên không được để trống' })
+    }
+
+    // Nếu tên cũ và tên mới giống nhau, không cần update
+    if (oldName === newNameTrimmed) {
+      return res.json({ ok: true })
+    }
+
+    // Rename: delete old, insert new
+    await players.deleteOne({ _id: oldName })
+    await players.insertOne({ _id: newNameTrimmed, name: newNameTrimmed })
+
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Xoá một người chơi
+app.delete('/api/players/:name', async (req, res) => {
+  try {
+    const name = req.params.name
+    const result = await players.deleteOne({ _id: name })
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Người chơi không tồn tại' })
+    }
+
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Cập nhật một loại chi phí
+app.put('/api/expense-types/:value', async (req, res) => {
+  try {
+    const value = req.params.value
+    const updated = req.body
+
+    if (!updated.label || typeof updated.label !== 'string') {
+      return res.status(400).json({ error: 'Label không hợp lệ' })
+    }
+
+    const result = await expenseTypes.updateOne(
+      { _id: value },
+      { $set: { ...updated, _id: value } }
+    )
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Loại chi phí không tồn tại' })
+    }
+
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Xoá một loại chi phí
+app.delete('/api/expense-types/:value', async (req, res) => {
+  try {
+    const value = req.params.value
+    const result = await expenseTypes.deleteOne({ _id: value })
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Loại chi phí không tồn tại' })
+    }
+
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ── Serve React build (production) ──────────────────────────
 app.use(express.static(path.join(__dirname, 'dist')))
 app.get('/{*path}', (_, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')))

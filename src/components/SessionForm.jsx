@@ -116,7 +116,6 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
   const [note, setNote] = useState('')
   const [people, setPeople] = useState(lastPeople)
   const [payer, setPayer] = useState(lastPayer)
-  const payerListId = useId()
   const typeListId = useId()
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
 
@@ -155,6 +154,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
     setHours('')
     setAmount('')
     setNote('')
+    setPayer(lastPayer)
     if (onAdded) {
       onAdded()
     }
@@ -240,18 +240,14 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Người trả</label>
-          <input
-            type="text"
-            list={payerListId}
-            value={payer}
-            placeholder="Nhập hoặc chọn tên"
-            onChange={(e) => setPayer(e.target.value)}
-          />
-          <datalist id={payerListId}>
+          <select value={payer} onChange={(e) => setPayer(e.target.value)}>
+            <option value="">-- Chọn người trả --</option>
             {sortPlayerNames([...names, ...people]).map((name) => (
-              <option key={name} value={name} />
+              <option key={name} value={name}>
+                {name}
+              </option>
             ))}
-          </datalist>
+          </select>
         </div>
       </div>
 
@@ -285,7 +281,6 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
   const [note, setNote] = useState(entry.note || '')
   const [payer, setPayer] = useState(entry.payer)
   const [people, setPeople] = useState(entry.people)
-  const payerListId = useId()
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
   const personNames = useMemo(() => sortPlayerNames([...names, payer, ...people]), [names, payer, people])
 
@@ -364,18 +359,14 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Người trả</label>
-          <input
-            type="text"
-            list={payerListId}
-            value={payer}
-            placeholder="Nhập hoặc chọn tên"
-            onChange={(e) => setPayer(e.target.value)}
-          />
-          <datalist id={payerListId}>
+          <select value={payer} onChange={(e) => setPayer(e.target.value)}>
+            <option value="">-- Chọn người trả --</option>
             {personNames.map((name) => (
-              <option key={name} value={name} />
+              <option key={name} value={name}>
+                {name}
+              </option>
             ))}
-          </datalist>
+          </select>
         </div>
       </div>
 
@@ -674,38 +665,47 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(15, 23, 42, 0.45)',
+            background: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(2px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px',
+            padding: '20px',
             zIndex: 1000,
           }}
-          onClick={() => setIsEntryModalOpen(false)}
         >
           <div
             className="card"
-            style={{ width: '100%', maxWidth: '860px', marginBottom: 0 }}
+            style={{
+              width: '100%',
+              maxWidth: '860px',
+              marginBottom: 0,
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="card-title" style={{ justifyContent: 'space-between' }}>
+            <div className="card-title" style={{ justifyContent: 'space-between', flexShrink: 0 }}>
               <span>💰 Thêm khoản chi</span>
               <button className="btn btn-outline btn-surface-strong btn-sm" onClick={() => setIsEntryModalOpen(false)}>
                 Đóng
               </button>
             </div>
-            <EntryForm
-              key={entries.length}
-              onAdd={handleAddEntry}
-              lastPeople={lastPeople}
-              lastPayer={lastPayer}
-              lastType={lastType}
-              names={playerNames}
-              expenseTypes={expenseTypes}
-              onAddName={onAddPlayerName}
-              onAddExpenseType={onAddExpenseType}
-              onAdded={() => setIsEntryModalOpen(false)}
-            />
+            <div style={{ flex: 1, overflow: 'auto', paddingBottom: '16px' }}>
+              <EntryForm
+                key={entries.length}
+                onAdd={handleAddEntry}
+                lastPeople={lastPeople}
+                lastPayer={lastPayer}
+                lastType={lastType}
+                names={playerNames}
+                expenseTypes={expenseTypes}
+                onAddName={onAddPlayerName}
+                onAddExpenseType={onAddExpenseType}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -715,34 +715,44 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(15, 23, 42, 0.45)',
+            background: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(2px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px',
+            padding: '20px',
             zIndex: 1000,
           }}
-          onClick={() => setEditingEntry(null)}
         >
           <div
             className="card"
-            style={{ width: '100%', maxWidth: '860px', marginBottom: 0 }}
+            style={{
+              width: '100%',
+              maxWidth: '860px',
+              marginBottom: 0,
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="card-title" style={{ justifyContent: 'space-between' }}>
+            <div className="card-title" style={{ justifyContent: 'space-between', flexShrink: 0 }}>
               <span>✏️ Chỉnh sửa khoản chi</span>
               <button className="btn btn-outline btn-surface-strong btn-sm" onClick={() => setEditingEntry(null)}>
                 Đóng
               </button>
             </div>
-            <EditEntryForm
-              entry={editingEntry}
-              names={playerNames}
-              expenseTypes={expenseTypes}
-              onAddName={onAddPlayerName}
-              onSave={handleUpdateEntry}
-              onCancel={() => setEditingEntry(null)}
-            />
+            <div style={{ flex: 1, overflow: 'auto', paddingBottom: '16px' }}>
+              <EditEntryForm
+                entry={editingEntry}
+                names={playerNames}
+                expenseTypes={expenseTypes}
+                onAddName={onAddPlayerName}
+                onSave={handleUpdateEntry}
+                onCancel={() => setEditingEntry(null)}
+              />
+            </div>
           </div>
         </div>
       )}

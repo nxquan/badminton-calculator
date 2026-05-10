@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { formatMoney, calculateTotals, getEntryLabel } from '../constants'
 
-export default function SessionHistory({ sessions, expenseTypes, onNewSession, onView, onDelete }) {
+export default function SessionHistory({ sessions, expenseTypes, onView, onDelete }) {
   const [monthFilter, setMonthFilter] = useState(() => {
     try {
       const stored = localStorage.getItem('sessionHistory.monthFilter')
@@ -37,12 +37,6 @@ export default function SessionHistory({ sessions, expenseTypes, onNewSession, o
 
   return (
     <div>
-      <div style={{ marginBottom: '16px' }}>
-        <button className="btn btn-primary" onClick={onNewSession} style={{ width: '100%' }}>
-          ➕ Phiên đánh mới
-        </button>
-      </div>
-
       {filteredSessions.length === 0 ? (
         <div className="card">
           <div className="empty-state">
@@ -52,8 +46,8 @@ export default function SessionHistory({ sessions, expenseTypes, onNewSession, o
           </div>
         </div>
       ) : (
-        <div className="card">
-          <div className="card-title">📜 Lịch sử ({sessions.length} phiên)</div>
+        <>
+          {/* <div className="card-title">📜 Lịch sử ({sessions.length} phiên)</div> */}
           <div style={{ margin: '8px 16px 12px 16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
             <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', flexShrink: 0 }}>Lọc theo tháng</label>
             <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
@@ -104,17 +98,21 @@ export default function SessionHistory({ sessions, expenseTypes, onNewSession, o
                         {formatMoney(Math.round(grandTotal * 1000))}
                       </td>
                       <td>
-                        <button
-                          className="btn btn-danger-soft btn-sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (window.confirm('Xóa phiên đánh này?')) {
-                              onDelete(session.id)
-                            }
-                          }}
-                        >
-                          <span className="btn-icon" aria-hidden="true">✕</span>
-                        </button>
+                        {Array.isArray(session.entries) && session.entries.length > 0 ? (
+                          <button className="btn btn-danger-soft btn-sm" disabled title="Không thể xóa: phiên đã có khoản chi">✕</button>
+                        ) : (
+                          <button
+                            className="btn btn-danger-soft btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (window.confirm('Xóa phiên đánh này?')) {
+                                onDelete(session.id)
+                              }
+                            }}
+                          >
+                            <span className="btn-icon" aria-hidden="true">✕</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )
@@ -122,7 +120,7 @@ export default function SessionHistory({ sessions, expenseTypes, onNewSession, o
               </tbody>
             </table>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

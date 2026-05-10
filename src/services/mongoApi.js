@@ -68,3 +68,23 @@ export async function upsertExpenseTypes(types) {
   if (!types.length) return
   return api('POST', '/expense-types/bulk', types)
 }
+
+/** Cập nhật tên người chơi */
+export async function updatePlayer(oldName, newName) {
+  return api('PUT', `/players/${encodeURIComponent(oldName)}`, { name: newName })
+}
+
+/** Xoá một người chơi */
+export async function removePlayer(name) {
+  return api('DELETE', `/players/${encodeURIComponent(name)}`)
+}
+
+/** Cập nhật một loại chi phí */
+export async function updateExpenseType(value, updated) {
+  return api('PUT', `/expense-types/${value}`, updated)
+}
+
+/** Xoá một loại chi phí */
+export async function removeExpenseType(value) {
+  return api('DELETE', `/expense-types/${value}`)
+}
