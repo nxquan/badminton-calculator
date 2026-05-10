@@ -1,8 +1,7 @@
 import { useEffect, useId, useMemo, useState, useCallback, useRef } from 'react'
 import { PLAYERS, COMBOS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, expenseTypeValueFromLabel, normalizeExpenseTypeLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
 
-function PeoplePicker({ selected, onToggle, names, onAddName }) {
-  const [customName, setCustomName] = useState('')
+function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCustomNameChange }) {
   const nameListId = useId()
   const sortedNames = useMemo(() => sortPlayerNames(names), [names])
   const displayNames = useMemo(
@@ -22,7 +21,7 @@ function PeoplePicker({ selected, onToggle, names, onAddName }) {
       onAddName(nextName)
     }
     onToggle(sortPlayerNames([...selected, nextName]))
-    setCustomName('')
+    onCustomNameChange('')
   }
 
   const handleCombo = (combo) => {
@@ -83,7 +82,7 @@ function PeoplePicker({ selected, onToggle, names, onAddName }) {
             list={nameListId}
             value={customName}
             placeholder="Nhập tên rồi bấm Thêm"
-            onChange={(e) => setCustomName(e.target.value)}
+            onChange={(e) => onCustomNameChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
@@ -99,7 +98,13 @@ function PeoplePicker({ selected, onToggle, names, onAddName }) {
         </div>
         <div className="form-group" style={{ flex: '0 0 auto', justifyContent: 'flex-end' }}>
           <label style={{ visibility: 'hidden' }}>Thêm</label>
-          <button type="button" className="btn btn-outline btn-input-height" onClick={handleAddCustomName}>
+          <button 
+            type="button" 
+            className="btn btn-outline btn-input-height" 
+            onClick={handleAddCustomName}
+            disabled={!customName.trim()}
+            style={{ opacity: !customName.trim() ? 0.5 : 1 }}
+          >
             + Thêm tên
           </button>
         </div>
@@ -111,6 +116,7 @@ function PeoplePicker({ selected, onToggle, names, onAddName }) {
 function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes, onAddName, onAddExpenseType, onAdded }) {
   const [type, setType] = useState(lastType)
   const [customType, setCustomType] = useState('')
+  const [customName, setCustomName] = useState('')
   const [hours, setHours] = useState('')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -160,6 +166,8 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
     }
   }
 
+  const hasUnprocessedInput = customType.trim() !== '' || customName.trim() !== ''
+
   return (
     <form onSubmit={handleSubmit}>
       <div className="form-row">
@@ -192,7 +200,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
               min="0.5"
               step="0.5"
               placeholder="VD: 2"
-              value={hours}
+              value={hours ?? 2}
               onChange={(e) => setHours(e.target.value)}
             />
           </div>
@@ -231,7 +239,13 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
         </div>
         <div className="form-group" style={{ flex: '0 0 auto', justifyContent: 'flex-end' }}>
           <label style={{ visibility: 'hidden' }}>Thêm loại</label>
-          <button type="button" className="btn btn-outline btn-input-height" onClick={handleAddCustomType}>
+          <button 
+            type="button" 
+            className="btn btn-outline btn-input-height" 
+            onClick={handleAddCustomType}
+            disabled={!customType.trim()}
+            style={{ opacity: !customType.trim() ? 0.5 : 1 }}
+          >
             + Thêm loại
           </button>
         </div>
@@ -255,13 +269,22 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
         <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
           Người tham gia
         </label>
-        <PeoplePicker selected={people} onToggle={setPeople} names={names} onAddName={onAddName} />
+        <PeoplePicker 
+          selected={people} 
+          onToggle={setPeople} 
+          names={names} 
+          onAddName={onAddName}
+          customName={customName}
+          onCustomNameChange={setCustomName}
+        />
       </div>
 
       <button
         type="submit"
         className="btn btn-primary"
-        disabled={!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0))}
+        disabled={!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0)) || hasUnprocessedInput}
+        title={hasUnprocessedInput ? 'Vui lòng xử lý input chưa hoàn thành' : ''}
+        style={{ opacity: (!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0)) || hasUnprocessedInput) ? 0.5 : 1 }}
       >
         Thêm khoản chi
         {amount && people.length > 0 && (
@@ -385,6 +408,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
           type="submit"
           className="btn btn-primary"
           disabled={!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0))}
+          style={{ opacity: (!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0))) ? 0.5 : 1 }}
         >
           ✓ Lưu thay đổi
         </button>
@@ -766,6 +790,7 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
           className="btn btn-primary"
           onClick={handleSave}
           disabled={entries.length === 0}
+          style={{ opacity: entries.length === 0 ? 0.5 : 1 }}
         >
           <span className="btn-icon" aria-hidden="true">✓</span>
           Lưu phiên đánh
