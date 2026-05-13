@@ -56,7 +56,7 @@ export function getSessionPeople(sessions) {
 export function getEntryLabel(entry, expenseTypes = DEFAULT_EXPENSE_TYPES) {
   const typeInfo = expenseTypes.find((t) => t.value === entry.type)
   const label = typeInfo ? `${typeInfo.emoji || '🧾'} ${typeInfo.label}` : entry.type
-  return entry.note ? `${label} - ${entry.note}` : label
+  return entry.note ? `${label} : ${entry.note}` : label
 }
 
 export function calculateTotals(entries) {

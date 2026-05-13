@@ -64,7 +64,8 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                   <th style={{textAlign: 'center'}}>Ngày</th>
                   <th style={{textAlign: 'center'}}>Người</th>
                   <th style={{textAlign: 'center'}}>Số giờ CL</th>
-                  <th style={{textAlign: 'center'}}>Chi tiết</th>
+                  <th style={{textAlign: 'center'}}>Phiên đặc biệt</th>
+                  <th style={{textAlign: 'center'}}>Ghi chú</th>
                   <th style={{textAlign: 'center'}}>Tổng</th>
                   <th style={{textAlign: 'center'}}></th>
                 </tr>
@@ -74,6 +75,7 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                   const totals = calculateTotals(session.entries)
                   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
                   const playerCount = new Set(session.entries.flatMap((e) => e.people)).size
+                  const isSpecialSession = session.entries.some((e) => (e.people || []).includes('Khánh'))
                   
                   // Calculate total hours
                   const totalHours = session.entries
@@ -87,8 +89,13 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                     year: 'numeric',
                   })
 
-                  const details = session.entries.map((e) => getEntryLabel(e, expenseTypes)).join(', ')
-
+                  let details = session.entries
+                    .map((e) => {
+                      const label = getEntryLabel(e, expenseTypes)
+                      return e.note.length > 0 ? label : null
+                    })
+                    .filter(Boolean)
+                  
                   return (
                     <tr
                       key={session.id}
@@ -98,8 +105,11 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                       <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formattedDate}</td>
                       <td>{playerCount}</td>
                       <td style={{ textAlign: 'center' }}>{totalHours > 0 ? `${totalHours}h` : '-'}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 600, color: isSpecialSession ? 'var(--success)' : 'var(--text-secondary)' }}>
+                        {isSpecialSession ? 'Có' : 'Không'}
+                      </td>
                       <td>
-                        <span className="history-details">{details}</span>
+                        <div >{details.map((detail) => <div key={detail}>{detail}</div>)}</div>
                       </td>
                       <td style={{ 
                         whiteSpace: 'nowrap', 
@@ -110,9 +120,7 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                         {formatMoney(Math.round(grandTotal * 1000))}
                       </td>
                       <td>
-                        {Array.isArray(session.entries) && session.entries.length > 0 ? (
-                          <button className="btn btn-danger-soft btn-sm" disabled title="Không thể xóa: phiên đã có khoản chi">✕</button>
-                        ) : (
+                        {(!session?.settledPlayers || !session?.settledPlayers?.length) && (
                           <button
                             className="btn btn-danger-soft btn-sm"
                             onClick={(e) => {

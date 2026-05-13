@@ -226,9 +226,13 @@ export default function App() {
 
   const handleBack = useCallback(() => {
     setCurrentSession(null)
-    setViewingSession(null)
     setIsAddSessionModalOpen(false)
-  }, [])
+    if (!isEditingSessionInModal) {
+      setViewingSession(null)
+      setSidebarView({ view: 'sessions', session: null })
+    }
+    setIsEditingSessionInModal(false)
+  }, [isEditingSessionInModal])
 
   const handleEditSession = useCallback((session) => {
     setCurrentSession(session)

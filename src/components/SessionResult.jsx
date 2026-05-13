@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Fragment } from 'react'
 import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
 
 export default function SessionResult({ session, expenseTypes, onBack, onUpdateSession, onEditSession }) {
@@ -63,6 +63,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   }
 
   const handleSetTransferTo = (name) => {
+    if (!canChangeTransferTo) return
     setTransferTo(name)
     try {
       localStorage.setItem(`session.transferTo.${session.id}`, name)
@@ -95,6 +96,23 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
       return String(getEntryLabel(a, expenseTypes)).localeCompare(String(getEntryLabel(b, expenseTypes)), 'vi', { sensitivity: 'base' })
     })
   }, [session.entries, expenseTypes])
+
+  const playerColumns = useMemo(
+    () => sortPlayerNames([...new Set((session.entries || []).flatMap((entry) => entry.people || []))]),
+    [session.entries]
+  )
+
+  const groupedEntries = useMemo(() => {
+    const groups = {}
+    sortedEntries.forEach((entry) => {
+      if (!groups[entry.type]) {
+        groups[entry.type] = []
+      }
+      groups[entry.type].push(entry)
+    })
+    return Object.entries(groups).map(([type, items]) => ({ type, items }))
+  }, [sortedEntries])
+  const canChangeTransferTo = settledPlayers.length === 0
 
   // Calculate breakdown by expense type for each person
   const expenseTypeBreakdown = useMemo(() => {
@@ -159,7 +177,14 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
           <div className="card-title">📋 Chi tiết khoản chi</div>
 
           <div className="table-wrap">
-            <table className="result-table" style={{ marginBottom: 0 }}>
+            <table className="result-table" style={{ marginBottom: 0, tableLayout: 'fixed', width: '100%' }}>
+              <colgroup>
+                <col style={{ width: '240px' }} />
+                <col style={{ width: '60px' }} />
+                <col style={{ width: '120px' }} />
+                <col />
+                <col style={{ width: '84px' }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Khoản</th>
@@ -170,26 +195,66 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 </tr>
               </thead>
               <tbody>
-                {sortedEntries.map((entry) => {
-                  const perPerson = entry.amount / entry.people.length
+                {groupedEntries.map((group, groupIndex) => {
                   return (
-                    <tr key={entry.id}>
-                      <td>
-                        <span className={`type-badge ${entry.type}`}>
-                          {getEntryLabel(entry, expenseTypes)}
-                        </span>
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{entry.payer || 'Trí'}</td>
-                      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
-                        {formatMoney(entry.amount * 1000)}
-                      </td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        {sortPlayerNames(entry.people).join(', ')}
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 500, fontSize: '0.8rem' }}>
-                        {formatMoney(Math.round(perPerson * 1000))}
-                      </td>
-                    </tr>
+                    <Fragment key={group.type}>
+                      {group.items.map((entry, itemIndex) => {
+                        const perPerson = entry.amount / entry.people.length
+                        const isFirstInGroup = itemIndex === 0
+                        const bgColor = groupIndex % 2 === 0 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.5)'
+                        const borderTop = isFirstInGroup ? '1px solid rgba(59, 130, 246, 1)' : 'none'
+
+                        return (
+                          <tr key={entry.id} style={{ backgroundColor: bgColor, borderTop }}>
+                            <td>
+                              <span className={`type-badge ${entry.type}`}>
+                                {getEntryLabel(entry, expenseTypes)}
+                              </span>
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {entry.payer || 'Trí'}
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                              {formatMoney(entry.amount * 1000)}
+                            </td>
+                            <td style={{ fontSize: '0.75rem', color: 'rgb(73, 101, 243)', minWidth: 0 }}>
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: `repeat(${Math.max(playerColumns.length, 1)}, minmax(42px, 1fr))`,
+                                  gap: '1px',
+                                  width: '100%',
+                                }}
+                              >
+                                {playerColumns.map((name) => (
+                                  <span
+                                    key={name}
+                                    style={{
+                                      backgroundColor: entry.people.includes(name) ? 'rgba(73, 101, 243, 0.2)' : 'transparent',
+                                      padding: '1px 3px',
+                                      borderRadius: '3px',
+                                      fontWeight: 500,
+                                      fontSize: '0.7rem',
+                                      whiteSpace: 'nowrap',
+                                      textAlign: 'center',
+                                      minHeight: '18px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
+                                  >
+                                    {entry.people.includes(name) ? name : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 500, fontSize: '0.8rem' }}>
+                              {formatMoney(Math.round(perPerson * 1000))}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -220,12 +285,18 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                   key={name}
                   type="button"
                   className={`people-chip ${transferTo === name ? 'selected' : ''}`}
+                  disabled={!canChangeTransferTo}
                   onClick={() => handleSetTransferTo(name)}
                 >
                   {name}
                 </button>
               ))}
             </div>
+            {!canChangeTransferTo && (
+              <div style={{ marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Đã có người thanh toán nên không thể đổi người chuyển tiền.
+              </div>
+            )}
           </div>
 
           <table className="result-table">

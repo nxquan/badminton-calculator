@@ -1,8 +1,7 @@
-import { useEffect, useId, useMemo, useState, useCallback, useRef } from 'react'
-import { PLAYERS, COMBOS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, expenseTypeValueFromLabel, normalizeExpenseTypeLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
+import { useEffect, useId, useMemo, useState, useCallback, useRef, Fragment } from 'react'
+import { PLAYERS, COMBOS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
 
 function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCustomNameChange }) {
-  const nameListId = useId()
   const sortedNames = useMemo(() => sortPlayerNames(names), [names])
   const displayNames = useMemo(
     () => sortPlayerNames([...sortedNames, ...selected]),
@@ -13,16 +12,6 @@ function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCust
   const isComboActive = (combo) =>
     combo.members.every((m) => selected.includes(m)) &&
     selected.every((s) => combo.members.includes(s))
-
-  const handleAddCustomName = () => {
-    const nextName = customName.trim()
-    if (!nextName) return
-    if (onAddName) {
-      onAddName(nextName)
-    }
-    onToggle(sortPlayerNames([...selected, nextName]))
-    onCustomNameChange('')
-  }
 
   const handleCombo = (combo) => {
     onToggle(isComboActive(combo) ? [] : [...combo.members])
@@ -73,72 +62,19 @@ function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCust
           </button>
         ))}
       </div>
-
-      <div className="form-row" style={{ marginBottom: '8px' }}>
-        <div className="form-group" style={{ flex: '1 1 220px', minWidth: '180px' }}>
-          <label>Thêm tên mới</label>
-          <input
-            type="text"
-            list={nameListId}
-            value={customName}
-            placeholder="Nhập tên rồi bấm Thêm"
-            onChange={(e) => onCustomNameChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleAddCustomName()
-              }
-            }}
-          />
-          <datalist id={nameListId}>
-            {sortedNames.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </div>
-        <div className="form-group" style={{ flex: '0 0 auto', justifyContent: 'flex-end' }}>
-          <label style={{ visibility: 'hidden' }}>Thêm</label>
-          <button 
-            type="button" 
-            className="btn btn-outline btn-input-height" 
-            onClick={handleAddCustomName}
-            disabled={!customName.trim()}
-            style={{ opacity: !customName.trim() ? 0.5 : 1 }}
-          >
-            + Thêm tên
-          </button>
-        </div>
-      </div>
     </div>
   )
 }
 
+
 function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes, onAddName, onAddExpenseType, onAdded }) {
   const [type, setType] = useState(lastType)
-  const [customType, setCustomType] = useState('')
-  const [customName, setCustomName] = useState('')
-  const [hours, setHours] = useState('')
-  const [amount, setAmount] = useState('')
+  const [hours, setHours] = useState(type === 'san' ? '2' : '')
+  const [amount, setAmount] = useState(type === 'san' ? 240 : '')
   const [note, setNote] = useState('')
   const [people, setPeople] = useState(lastPeople)
   const [payer, setPayer] = useState(lastPayer)
-  const typeListId = useId()
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
-
-  const handleAddCustomType = () => {
-    const nextLabel = normalizeExpenseTypeLabel(customType)
-    if (!nextLabel) return
-    const nextType = {
-      value: expenseTypeValueFromLabel(nextLabel),
-      label: nextLabel,
-      emoji: '🧾',
-    }
-    if (onAddExpenseType) {
-      onAddExpenseType(nextType)
-    }
-    setType(nextType.value)
-    setCustomType('')
-  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -157,23 +93,39 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
       people: [...people],
     })
 
-    setHours('')
-    setAmount('')
+    setHours(type === 'san' ? '2' : '')
+    setAmount(type === 'san' ? 240 : '')
     setNote('')
     setPayer(lastPayer)
+    setPeople(['san', 'cau', 'tra-da'].includes(type) ? people : [])
     if (onAdded) {
       onAdded()
     }
   }
 
-  const hasUnprocessedInput = customType.trim() !== '' || customName.trim() !== ''
+
 
   return (
     <form onSubmit={handleSubmit}>
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Loại chi phí</label>
-          <select value={type} onChange={(e) => setType(e.target.value)}>
+          <select value={type} onChange={(e) => {
+            const newType = e.target.value
+            setType(newType)
+            if (newType === 'san') {
+              setHours('2')
+              setAmount('240')
+            } else {
+              setHours('') 
+              setAmount('')
+            }
+            
+            // Reset people if type is not one of the main types
+            if (!['san', 'cau', 'tra-da'].includes(newType)) {
+              setPeople([])
+            }
+          }}>
             {sortedTypes.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.emoji || '🧾'} {t.label}
@@ -215,41 +167,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
         </div>
       </div>
 
-      <div className="form-row" style={{ marginTop: '-4px' }}>
-        <div className="form-group" style={{ flex: '1 1 220px', minWidth: '180px' }}>
-          <label>Thêm loại mới</label>
-          <input
-            type="text"
-            list={typeListId}
-            value={customType}
-            placeholder="Nhập loại chi phí mới"
-            onChange={(e) => setCustomType(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleAddCustomType()
-              }
-            }}
-          />
-          <datalist id={typeListId}>
-            {sortedTypes.map((t) => (
-              <option key={t.value} value={t.label} />
-            ))}
-          </datalist>
-        </div>
-        <div className="form-group" style={{ flex: '0 0 auto', justifyContent: 'flex-end' }}>
-          <label style={{ visibility: 'hidden' }}>Thêm loại</label>
-          <button 
-            type="button" 
-            className="btn btn-outline btn-input-height" 
-            onClick={handleAddCustomType}
-            disabled={!customType.trim()}
-            style={{ opacity: !customType.trim() ? 0.5 : 1 }}
-          >
-            + Thêm loại
-          </button>
-        </div>
-      </div>
+
 
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
@@ -274,17 +192,16 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
           onToggle={setPeople} 
           names={names} 
           onAddName={onAddName}
-          customName={customName}
-          onCustomNameChange={setCustomName}
+          customName=""
+          onCustomNameChange={() => {}}
         />
       </div>
 
       <button
         type="submit"
         className="btn btn-primary"
-        disabled={!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0)) || hasUnprocessedInput}
-        title={hasUnprocessedInput ? 'Vui lòng xử lý input chưa hoàn thành' : ''}
-        style={{ opacity: (!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0)) || hasUnprocessedInput) ? 0.5 : 1 }}
+        disabled={!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0))}
+        style={{ opacity: (!amount || Number(amount) <= 0 || people.length === 0 || (type === 'san' && (!hours || Number(hours) <= 0))) ? 0.5 : 1 }}
       >
         Thêm khoản chi
         {amount && people.length > 0 && (
@@ -304,6 +221,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
   const [note, setNote] = useState(entry.note || '')
   const [payer, setPayer] = useState(entry.payer)
   const [people, setPeople] = useState(entry.people)
+  const [customName, setCustomName] = useState('')
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
   const personNames = useMemo(() => sortPlayerNames([...names, payer, ...people]), [names, payer, people])
 
@@ -314,6 +232,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
     setNote(entry.note || '')
     setPayer(entry.payer)
     setPeople(entry.people)
+    setCustomName('')
   }, [entry])
 
   const handleSubmit = (e) => {
@@ -339,7 +258,15 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Loại chi phí</label>
-          <select value={type} onChange={(e) => setType(e.target.value)}>
+          <select value={type} onChange={(e) => {
+            const newType = e.target.value
+            setType(newType)
+            
+            // Reset people if type is not one of the main types
+            if (!['san', 'cau', 'tra-da'].includes(newType)) {
+              setPeople([])
+            }
+          }}>
             {sortedTypes.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.emoji || '🧾'} {t.label}
@@ -397,7 +324,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
         <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
           Người tham gia
         </label>
-        <PeoplePicker selected={people} onToggle={setPeople} names={names} onAddName={onAddName} />
+        <PeoplePicker selected={people} onToggle={setPeople} names={names} onAddName={onAddName} customName={customName} onCustomNameChange={setCustomName} />
       </div>
 
       <div className="actions-bar">
@@ -459,6 +386,10 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
     () => sortPlayerNames([...names, ...entries.flatMap((entry) => [entry.payer, ...(entry.people || [])])]),
     [entries, names]
   )
+  const playerColumns = useMemo(
+    () => sortPlayerNames([...new Set([...names, ...entries.flatMap((entry) => entry.people || [])])]),
+    [entries, names]
+  )
 
   const sortedEntries = useMemo(() => {
     const orderMap = sortExpenseTypes(expenseTypes || []).reduce((m, t, i) => {
@@ -473,6 +404,17 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
       return String(getEntryLabel(a, expenseTypes)).localeCompare(String(getEntryLabel(b, expenseTypes)), 'vi', { sensitivity: 'base' })
     })
   }, [entries, expenseTypes])
+
+  const groupedEntries = useMemo(() => {
+    const groups = {}
+    sortedEntries.forEach((entry) => {
+      if (!groups[entry.type]) {
+        groups[entry.type] = []
+      }
+      groups[entry.type].push(entry)
+    })
+    return Object.entries(groups).map(([type, items]) => ({ type, items }))
+  }, [sortedEntries])
 
   function formatDisplayDate(iso) {
     if (!iso) return ''
@@ -583,6 +525,14 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
         </div>
         <div className="table-wrap">
           <table className="result-table">
+            <colgroup>
+              <col style={{ width: '88px' }} />
+              <col style={{ width: '92px' }} />
+              <col style={{ width: '92px' }} />
+              <col />
+              <col style={{ width: '84px' }} />
+              <col style={{ width: '72px' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>Khoản</th>
@@ -601,45 +551,86 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
                   </td>
                 </tr>
               ) : (
-                sortedEntries.map((entry) => {
-                  const perPerson = entry.amount / entry.people.length
+                groupedEntries.map((group, groupIndex) => {
                   return (
-                    <tr
-                      key={entry.id}
-                      className="entry-editable-row"
-                    >
-                      <td>
-                        <span className={`type-badge ${entry.type}`}>
-                          {getEntryLabel(entry, expenseTypes)}
-                        </span>
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{entry.payer}</td>
-                      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
-                        {formatMoney(entry.amount * 1000)}
-                      </td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        {sortPlayerNames(entry.people).join(', ')}
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 500, fontSize: '0.8rem' }}>
-                        {formatMoney(Math.round(perPerson * 1000))}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                          <button
-                            className="btn btn-outline btn-sm"
-                            onClick={() => setEditingEntry(entry)}
+                    <Fragment key={group.type}>
+                      {group.items.map((entry, itemIndex) => {
+                        const perPerson = entry.amount / entry.people.length
+                        const isFirstInGroup = itemIndex === 0
+                        const bgColor = groupIndex % 2 === 0 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.5)'
+                        const borderTop = isFirstInGroup ? '1px solid rgba(59, 130, 246, 1)' : 'none'
+
+                        return (
+                          <tr
+                            key={entry.id}
+                            className="entry-editable-row"
+                            style={{ backgroundColor: bgColor, borderTop }}
                           >
-                            ✎
-                          </button>
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => handleRemoveEntry(entry.id)}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                            <td>
+                              <span className={`type-badge ${entry.type}`}>
+                                {getEntryLabel(entry, expenseTypes)}
+                              </span>
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {entry.payer}
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                              {formatMoney(entry.amount * 1000)}
+                            </td>
+                            <td style={{ fontSize: '0.75rem', color: 'rgb(73, 101, 243)', minWidth: 0 }}>
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: `repeat(${Math.max(playerColumns.length, 1)}, minmax(42px, 1fr))`,
+                                  gap: '1px',
+                                  width: '100%',
+                                }}
+                              >
+                                {playerColumns.map((name) => (
+                                  <span
+                                    key={name}
+                                    style={{
+                                      backgroundColor: entry.people.includes(name) ? 'rgba(73, 101, 243, 0.2)' : 'transparent',
+                                      padding: '1px 3px',
+                                      borderRadius: '3px',
+                                      fontWeight: 500,
+                                      fontSize: '0.7rem',
+                                      whiteSpace: 'nowrap',
+                                      textAlign: 'center',
+                                      minHeight: '18px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
+                                  >
+                                    {entry.people.includes(name) ? name : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
+                              {formatMoney(Math.round(perPerson * 1000))}
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() => setEditingEntry(entry)}
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => handleRemoveEntry(entry.id)}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </Fragment>
                   )
                 })
               )}
