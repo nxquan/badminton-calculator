@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import SessionForm from './components/SessionForm'
 import Sidebar from './components/Sidebar'
 import * as mongoApi from './services/mongoApi'
 import { DEFAULT_EXPENSE_TYPES, getSessionPeople, sortExpenseTypes, sortPlayerNames } from './constants'
 // Page imports
 import SessionsPage from './pages/SessionsPage'
+import MatchHistoryPage from './pages/MatchHistoryPage'
 import SessionDetailPage from './pages/SessionDetailPage'
 import PlayersPage from './pages/PlayersPage'
 import ExpenseTypesPage from './pages/ExpenseTypesPage'
@@ -381,6 +382,40 @@ export default function App() {
     setEditExpenseTypeEmoji('🧾')
   }, [editExpenseTypeValue, editExpenseTypeLabel, editExpenseTypeEmoji, handleEditExpenseType])
 
+  const playerStats = useMemo(() => {
+    const stats = {}
+    for (const name of playerNames) {
+      stats[name] = { total: 0, avgPerMonth: 0 }
+    }
+
+    if (!sessions || sessions.length === 0) return stats
+
+    // compute date span in months (inclusive)
+    const dates = sessions.map((s) => new Date(s.date))
+    const minDate = new Date(Math.min(...dates))
+    const maxDate = new Date(Math.max(...dates))
+    const monthsSpan = (maxDate.getFullYear() - minDate.getFullYear()) * 12 + (maxDate.getMonth() - minDate.getMonth()) + 1
+
+    for (const session of sessions) {
+      const participants = new Set()
+      ;(session.entries || []).forEach((entry) => {
+        if (entry.payer) participants.add(entry.payer)
+        ;(entry.people || []).forEach((p) => participants.add(p))
+      })
+
+      for (const name of Object.keys(stats)) {
+        if (participants.has(name)) stats[name].total += 1
+      }
+    }
+
+    for (const name of Object.keys(stats)) {
+      const total = stats[name].total || 0
+      stats[name].avgPerMonth = monthsSpan > 0 ? Number((total / monthsSpan).toFixed(1)) : 0
+    }
+
+    return stats
+  }, [sessions, playerNames])
+
 
 
 
@@ -416,6 +451,12 @@ export default function App() {
                 onNewSession={handleNewSession}
               />
             )}
+            {sidebarView.view === 'match-history' && (
+              <MatchHistoryPage
+                sessions={sessions}
+                onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
+              />
+            )}
             {sidebarView.view === 'session' && viewingSession && (
               <SessionDetailPage
                 session={viewingSession}
@@ -428,6 +469,7 @@ export default function App() {
             {sidebarView.view === 'players' && (
               <PlayersPage
                 playerNames={playerNames}
+                playerStats={playerStats}
                 onAddClick={() => {
                   setPlayerInputValue('')
                   setIsAddPlayerModalOpen(true)
@@ -463,7 +505,7 @@ export default function App() {
                 expenseTypes={expenseTypes}
               />
             )}
-            {!['sessions', 'session', 'players', 'types', 'stats'].includes(sidebarView.view) && (
+            {!['sessions', 'match-history', 'session', 'players', 'types', 'stats'].includes(sidebarView.view) && (
               <EmptyPage />
             )}
           </div>

@@ -15,6 +15,15 @@ export default function Sidebar({ onSelectMenu }) {
       <div className="sidebar-section">
         <button
           className="sidebar-menu-btn"
+          onClick={() => onSelectMenu && onSelectMenu('match-history')}
+        >
+          🏆 Lịch sử thi đấu
+        </button>
+      </div>
+
+      <div className="sidebar-section">
+        <button
+          className="sidebar-menu-btn"
           onClick={() => onSelectMenu && onSelectMenu('players')}
         >
           🧑 Người chơi
