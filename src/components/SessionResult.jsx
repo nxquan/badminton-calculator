@@ -429,9 +429,9 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                       <td>
                         {canSettle ? (
                           isSettled ? (
-                            <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Đã thanh toán</span>
+                            <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Paid</span>
                           ) : (
-                            <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Chưa thanh toán</span>
+                            <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Pending</span>
                           )
                         ) : (
                           <span style={{ color: 'var(--text-secondary)' }}>—</span>
