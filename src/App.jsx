@@ -497,14 +497,11 @@ export default function App() {
     return stats
   }, [sessions, playerNames])
 
-
-
-
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-content">
-          <img src="/src/files/icon.png" alt="Badminton" className="header-icon" />
+          <img src="./src/files/icon.png" alt="Badminton" className="header-icon" />
           <div className="header-info">
             <h1> Tính tiền cầu lông</h1>
             <p>Chia tiền sân, cầu, trà đá, cơm</p>
