@@ -28,6 +28,10 @@ export default function Sidebar({ onSelectMenu }) {
         >
           🧑 Người chơi
         </button>
+        <div className="sidebar-submenu">
+          <button className="sidebar-menu-btn" onClick={() => onSelectMenu && onSelectMenu('combo-T3')}>Thứ 3</button>
+          <button className="sidebar-menu-btn" onClick={() => onSelectMenu && onSelectMenu('combo-T7')}>Thứ 7</button>
+        </div>
       </div>
 
       <div className="sidebar-section">

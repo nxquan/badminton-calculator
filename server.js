@@ -19,6 +19,7 @@ const db = client.db('badminton')
 const sessions = db.collection('sessions')
 const players = db.collection('players')
 const expenseTypes = db.collection('expense_types')
+const combos = db.collection('combos')
 console.log('✅ Kết nối MongoDB thành công')
 
 // ── API routes ──────────────────────────────────────────────
@@ -166,6 +167,103 @@ app.get('/api/expense-types', async (req, res) => {
   try {
     const docs = await expenseTypes.find({}).sort({ label: 1 }).toArray()
     res.json(docs.map(({ _id, ...rest }) => rest))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Lấy danh sách combos (T3/T7)
+app.get('/api/combos', async (req, res) => {
+  try {
+    const docs = await combos.find({}).sort({ _id: 1 }).toArray()
+    // return normalized: [{ label, emoji, members }]
+    res.json(docs.map(({ _id, ...rest }) => rest))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Bulk upsert combos (keyed by label)
+app.post('/api/combos/bulk', async (req, res) => {
+  try {
+    const items = Array.isArray(req.body) ? req.body : []
+    const playerDocs = await players.find({}).toArray()
+    const nameToId = new Map(playerDocs.map((p) => [String(p.name || '').trim(), String(p._id)]))
+    const idToName = new Map(playerDocs.map((p) => [String(p._id), String(p.name || '').trim()]))
+
+    const normalizeMemberId = (value) => {
+      const raw = String(value || '').trim()
+      if (!raw) return null
+      return nameToId.get(raw) || raw
+    }
+
+    const normalized = []
+    for (const it of items) {
+      if (!it) continue
+      const label = String(it.label || '').trim()
+      if (!label) continue
+      const emoji = String(it.emoji || '').trim()
+      let members = Array.isArray(it.members) ? it.members.map(normalizeMemberId).filter(Boolean) : []
+      // Sort members alphabetically by name
+      members = members.sort((a, b) => {
+        const nameA = idToName.get(String(a)) || String(a)
+        const nameB = idToName.get(String(b)) || String(b)
+        return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' })
+      })
+      normalized.push({ label, emoji, members })
+    }
+
+    if (normalized.length === 0) return res.json({ ok: true, upserted: 0 })
+
+    await combos.bulkWrite(
+      normalized.map((c) => ({
+        updateOne: {
+          filter: { _id: c.label },
+          update: { $set: { _id: c.label, label: c.label, emoji: c.emoji, members: c.members } },
+          upsert: true,
+        },
+      }))
+    )
+
+    res.json({ ok: true, upserted: normalized.length })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Update a combo by label
+app.put('/api/combos/:label', async (req, res) => {
+  try {
+    const label = req.params.label
+    const { emoji, members } = req.body
+    const playerDocs = await players.find({}).toArray()
+    const nameToId = new Map(playerDocs.map((p) => [String(p.name || '').trim(), String(p._id)]))
+    const update = {}
+    if (emoji !== undefined) update.emoji = String(emoji)
+    if (members !== undefined) {
+      update.members = Array.isArray(members)
+        ? members.map((m) => {
+            const raw = String(m || '').trim()
+            return nameToId.get(raw) || raw
+          }).filter(Boolean)
+        : []
+    }
+
+    const result = await combos.updateOne({ _id: label }, { $set: { ...update, label } })
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Combo not found' })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Delete a combo by label
+app.delete('/api/combos/:label', async (req, res) => {
+  try {
+    const label = req.params.label
+    const result = await combos.deleteOne({ _id: label })
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Combo not found' })
+    res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

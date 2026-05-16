@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import SessionForm from './components/SessionForm'
 import Sidebar from './components/Sidebar'
 import * as mongoApi from './services/mongoApi'
-import { DEFAULT_EXPENSE_TYPES, getSessionPeople, sortExpenseTypes, sortPlayerNames } from './constants'
+import { DEFAULT_EXPENSE_TYPES, getSessionPeople, sortExpenseTypes, sortPlayerNames, loadCombos } from './constants'
 // Page imports
 import SessionsPage from './pages/SessionsPage'
 import MatchHistoryPage from './pages/MatchHistoryPage'
@@ -11,6 +11,7 @@ import PlayersPage from './pages/PlayersPage'
 import ExpenseTypesPage from './pages/ExpenseTypesPage'
 import StatsPage from './pages/StatsPage'
 import EmptyPage from './pages/EmptyPage'
+import ComboConfigPage from './pages/ComboConfigPage'
 
 const STORAGE_KEY = 'badminton-sessions'
 
@@ -58,6 +59,7 @@ export default function App() {
   const [sessions, setSessions] = useState(loadSessions)
   const [players, setPlayers] = useState([]) // array of { id, name }
   const [expenseTypes, setExpenseTypes] = useState(DEFAULT_EXPENSE_TYPES)
+  const [combos, setCombos] = useState(() => loadCombos())
   const [currentSession, setCurrentSession] = useState(null)
   const [viewingSession, setViewingSession] = useState(null)
   const [activeTab, setActiveTab] = useState('history')
@@ -149,8 +151,8 @@ export default function App() {
   useEffect(() => {
     if (!mongoApi.isConfigured) return
     setDbStatus('loading')
-    Promise.allSettled([mongoApi.getAllSessions(), mongoApi.getAllPlayers(), mongoApi.getAllExpenseTypes()])
-      .then(async ([sessionsResult, playersResult, typesResult]) => {
+    Promise.allSettled([mongoApi.getAllSessions(), mongoApi.getAllPlayers(), mongoApi.getAllExpenseTypes(), mongoApi.getAllCombos()])
+      .then(async ([sessionsResult, playersResult, typesResult, combosResult]) => {
         const localSessions = loadSessions()
         const docs = sessionsResult.status === 'fulfilled' ? sessionsResult.value : []
         const fetchedPlayersRaw = playersResult.status === 'fulfilled' ? playersResult.value : []
@@ -187,6 +189,18 @@ export default function App() {
 
         const resolvedTypes = sortExpenseTypes([...DEFAULT_EXPENSE_TYPES, ...types])
         setExpenseTypes(resolvedTypes)
+
+        // combos from DB (fallback to local storage)
+        try {
+          const fetchedCombos = combosResult.status === 'fulfilled' ? combosResult.value : null
+          if (Array.isArray(fetchedCombos) && fetchedCombos.length) {
+            setCombos(fetchedCombos)
+          } else {
+            setCombos(loadCombos())
+          }
+        } catch (e) {
+          setCombos(loadCombos())
+        }
 
         if (types.length === 0) {
           mongoApi.upsertExpenseTypes(DEFAULT_EXPENSE_TYPES).catch(console.error)
@@ -551,6 +565,60 @@ export default function App() {
                 onDeleteClick={handleDeletePlayer}
               />
             )}
+            {sidebarView.view === 'combo-T3' && (
+              <ComboConfigPage
+                label="T3"
+                combos={combos}
+                players={players}
+                onSave={async (updatedCombo) => {
+                  try {
+                    // replace or append in local combos list
+                    const next = (() => {
+                      const found = combos.find((c) => c.label === updatedCombo.label)
+                      if (found) return combos.map((c) => (c.label === updatedCombo.label ? updatedCombo : c))
+                      return [...combos, updatedCombo]
+                    })()
+                    setCombos(next)
+                    if (mongoApi.isConfigured) {
+                      await mongoApi.upsertCombos(next)
+                    } else {
+                      // fallback to localStorage
+                      const { saveCombos } = await import('./constants')
+                      saveCombos(next)
+                    }
+                  } catch (e) {
+                    console.error(e)
+                    alert('Lỗi khi lưu combo')
+                  }
+                }}
+              />
+            )}
+            {sidebarView.view === 'combo-T7' && (
+              <ComboConfigPage
+                label="T7"
+                combos={combos}
+                players={players}
+                onSave={async (updatedCombo) => {
+                  try {
+                    const next = (() => {
+                      const found = combos.find((c) => c.label === updatedCombo.label)
+                      if (found) return combos.map((c) => (c.label === updatedCombo.label ? updatedCombo : c))
+                      return [...combos, updatedCombo]
+                    })()
+                    setCombos(next)
+                    if (mongoApi.isConfigured) {
+                      await mongoApi.upsertCombos(next)
+                    } else {
+                      const { saveCombos } = await import('./constants')
+                      saveCombos(next)
+                    }
+                  } catch (e) {
+                    console.error(e)
+                    alert('Lỗi khi lưu combo')
+                  }
+                }}
+              />
+            )}
             {sidebarView.view === 'types' && (
               <ExpenseTypesPage
                 expenseTypes={expenseTypes}
@@ -575,7 +643,7 @@ export default function App() {
                 players={players}
               />
             )}
-            {!['sessions', 'match-history', 'session', 'players', 'types', 'stats'].includes(sidebarView.view) && (
+            {!['sessions', 'match-history', 'session', 'players', 'types', 'stats', 'combo-T3', 'combo-T7'].includes(sidebarView.view) && (
               <EmptyPage />
             )}
           </div>
@@ -754,7 +822,7 @@ export default function App() {
       {/* Modal SessionForm - Phiên đánh mới / Chỉnh sửa */}
       {isAddSessionModalOpen && currentSession && (
         <div className="modal-backdrop" style={{ pointerEvents: 'auto' }}>
-          <div className="modal-content" style={{ maxWidth: '1000px', maxHeight: '90vh', padding: 16 }}>
+          <div className="modal-content" style={{ maxWidth: '1080px', maxHeight: '90vh', padding: 16 }}>
             <div className="modal-header">
               <h2>{isEditingSessionInModal ? 'Chỉnh sửa phiên' : 'Phiên đánh mới'}</h2>
               <button className="modal-close" onClick={handleBack}>✕</button>
@@ -764,6 +832,7 @@ export default function App() {
                 session={currentSession}
                 players={players}
                 expenseTypes={expenseTypes}
+                combos={combos}
                 onAddPlayerName={handleAddPlayerName}
                 onAddExpenseType={handleAddExpenseType}
                 onSave={handleSaveSession}

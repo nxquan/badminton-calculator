@@ -1,9 +1,26 @@
 export const PLAYERS = ['Trí', 'Tỷ', 'Khánh', 'Bin', 'Tèo', 'Khoa', 'Thành', 'Bình', 'Quân', 'Long']
 
-export const COMBOS = [
-  { label: 'T3', emoji: '🟢', members: ['Trí', 'Tỷ', 'Khánh', 'Bin', 'Tèo', 'Khoa'] },
-  { label: 'T7', emoji: '🔵', members: ['Trí', 'Tỷ', 'Khánh', 'Bin', 'Tèo', 'Quân', 'Long'] },
-]
+const COMBOS_STORAGE_KEY = 'badminton-combos'
+
+export function loadCombos() {
+  try {
+    const raw = localStorage.getItem(COMBOS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+  } catch {
+    return []
+  }
+}
+
+export function saveCombos(list) {
+  try {
+    localStorage.setItem(COMBOS_STORAGE_KEY, JSON.stringify(list))
+  } catch (e) {
+    console.error('saveCombos error', e)
+  }
+}
 
 export const DEFAULT_EXPENSE_TYPES = [
   { value: 'san', label: 'Tiền sân', emoji: '🏟️' },

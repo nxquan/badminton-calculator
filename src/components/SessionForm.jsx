@@ -1,7 +1,8 @@
 import { useEffect, useId, useMemo, useState, useCallback, useRef, Fragment } from 'react'
-import { PLAYERS, COMBOS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
+import { createPortal } from 'react-dom'
+import { PLAYERS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
 
-function PeoplePicker({ selected, onToggle, players = [], onAddName, customName, onCustomNameChange }) {
+function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName, customName, onCustomNameChange }) {
   const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
   const displayPlayers = useMemo(() => {
     const ids = new Set(sortedPlayers.map((p) => p.id))
@@ -10,23 +11,49 @@ function PeoplePicker({ selected, onToggle, players = [], onAddName, customName,
     return [...sortedPlayers, ...extras]
   }, [sortedPlayers, selected])
 
+  // Sort combo members alphabetically by name
+  const sortedCombos = useMemo(() => {
+    return (combos || []).map((combo) => ({
+      ...combo,
+      members: (combo.members || [])
+        .slice()
+        .sort((a, b) => {
+          const nameA = (players.find((p) => p.id === a)?.name) || String(a)
+          const nameB = (players.find((p) => p.id === b)?.name) || String(b)
+          return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' })
+        })
+    }))
+  }, [combos, players])
+
   const allSelected = sortedPlayers.length > 0 && sortedPlayers.every((p) => selected.includes(p.id))
 
+  const resolveMemberId = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return null
+    const byId = players.find((p) => String(p.id) === raw)
+    if (byId) return byId.id
+    const byName = players.find((p) => p.name === raw)
+    if (byName) return byName.id
+    // Fallback: if not found by id or name, return raw (it might be a valid id not in players list yet)
+    return raw
+  }
+
+  const comboMemberIds = (combo) => (combo.members || []).map(resolveMemberId).filter(Boolean)
+
   const isComboActive = (combo) => {
-    // combo.members are names; map to ids
-    const memberIds = combo.members.map((name) => players.find((p) => p.name === name)?.id).filter(Boolean)
+    const memberIds = comboMemberIds(combo)
     return memberIds.length > 0 && memberIds.every((m) => selected.includes(m)) && selected.every((s) => memberIds.includes(s))
   }
 
   const handleCombo = (combo) => {
-    const memberIds = combo.members.map((name) => players.find((p) => p.name === name)?.id).filter(Boolean)
+    const memberIds = comboMemberIds(combo)
     onToggle(isComboActive(combo) ? [] : [...memberIds])
   }
 
   return (
     <div>
       <div className="select-actions">
-        {COMBOS.map((combo) => (
+        {(sortedCombos || []).map((combo) => (
           <button
             key={combo.label}
             type="button"
@@ -73,7 +100,7 @@ function PeoplePicker({ selected, onToggle, players = [], onAddName, customName,
 }
 
 
-function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names = [], expenseTypes, onAddName, onAddExpenseType, onAdded }) {
+function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names = [], expenseTypes, combos = [], onAddName, onAddExpenseType, onAdded }) {
   const [type, setType] = useState(lastType)
   const [hours, setHours] = useState(type === 'san' ? '2' : '')
   const [amount, setAmount] = useState(type === 'san' ? 240 : '')
@@ -198,6 +225,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
           selected={people} 
           onToggle={setPeople} 
           players={players}
+          combos={combos}
           onAddName={onAddName}
           customName=""
           onCustomNameChange={() => {}}
@@ -221,7 +249,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
   )
 }
 
-function EditEntryForm({ entry, players = [], expenseTypes, onAddName, onSave, onCancel }) {
+function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddName, onSave, onCancel }) {
   const [type, setType] = useState(entry.type)
   const [hours, setHours] = useState(entry.hours ? String(entry.hours) : '')
   const [amount, setAmount] = useState(String(entry.amount))
@@ -331,7 +359,7 @@ function EditEntryForm({ entry, players = [], expenseTypes, onAddName, onSave, o
         <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
           Người tham gia
         </label>
-        <PeoplePicker selected={people} onToggle={setPeople} players={players} onAddName={onAddName} customName={customName} onCustomNameChange={setCustomName} />
+        <PeoplePicker selected={people} onToggle={setPeople} players={players} combos={combos} onAddName={onAddName} customName={customName} onCustomNameChange={setCustomName} />
       </div>
 
       <div className="actions-bar">
@@ -351,14 +379,30 @@ function EditEntryForm({ entry, players = [], expenseTypes, onAddName, onSave, o
   )
 }
 
-export default function SessionForm({ session, players = [], expenseTypes, onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
+export default function SessionForm({ session, players = [], expenseTypes, combos = [], onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
   const [date, setDate] = useState(session.date || new Date().toISOString().split('T')[0])
   const dateInputId = useId()
   const [entries, setEntries] = useState(session.entries || [])
   const [editingEntry, setEditingEntry] = useState(null)
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false)
   const [lastPeople, setLastPeople] = useState([])
-  const [lastPayer, setLastPayer] = useState(DEFAULT_PAYER)
+  const [lastPayer, setLastPayer] = useState(() => {
+    const found = (players || []).find((p) => p.name === DEFAULT_PAYER)
+    return found ? found.id : DEFAULT_PAYER
+  })
+
+  // if players load after mount, ensure lastPayer is the id for DEFAULT_PAYER
+  useEffect(() => {
+    if (!players || players.length === 0) return
+    const found = players.find((p) => p.name === DEFAULT_PAYER)
+    if (found) {
+      // only update if lastPayer is still the default name or invalid id
+      const currentIsValid = players.some((pl) => pl.id === lastPayer)
+      if (!currentIsValid || lastPayer === DEFAULT_PAYER) {
+        setLastPayer(found.id)
+      }
+    }
+  }, [players])
   const [lastType, setLastType] = useState('san')
 
   const handleAddEntry = useCallback((entry) => {
@@ -390,6 +434,31 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
   const totals = calculateTotals(entries)
   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
   const idToName = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p.name])), [players])
+  // build ordered expense types present in this session (objects with emoji/label/value)
+  const sessionExpenseTypes = useMemo(() => {
+    const typeSet = new Set((entries || []).map(e => e.type))
+    const arr = [...typeSet].map(t => {
+      const found = expenseTypes?.find(et => et.value === t)
+      return found || { value: t, label: t, emoji: '' }
+    })
+    return sortExpenseTypes(arr)
+  }, [entries, expenseTypes])
+
+  const perPlayerDetail = useMemo(() => {
+    const detail = {}
+    ;(entries || []).forEach((entry) => {
+      const label = String(getEntryLabel(entry, expenseTypes) || entry.type)
+      const people = entry.people || []
+      const share = (entry.amount || 0) / Math.max(people.length, 1)
+      people.forEach((p) => {
+        const name = idToName[p] || p
+        if (!detail[name]) detail[name] = { total: 0, types: {} }
+        detail[name].total += share
+        detail[name].types[label] = (detail[name].types[label] || 0) + share
+      })
+    })
+    return detail
+  }, [entries, expenseTypes, idToName])
   const participantNames = useMemo(() => {
     return sortPlayerNames(entries.flatMap((entry) => [idToName[entry.payer] || entry.payer, ...(entry.people || []).map((p) => idToName[p] || p)]))
   }, [entries, idToName])
@@ -436,31 +505,99 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
 
   function DateField({ id, value, onChange }) {
     const inputRef = useRef(null)
+    const wrapperRef = useRef(null)
+    const [open, setOpen] = useState(false)
+    const [viewYear, setViewYear] = useState(() => (value ? Number(String(value).slice(0,4)) : new Date().getFullYear()))
+    const [viewMonth, setViewMonth] = useState(() => (value ? Number(String(value).slice(5,7)) - 1 : new Date().getMonth()))
 
-    const openPicker = () => {
-      const el = inputRef.current
-      if (!el) return
-      // Prefer showPicker() if available (Chromium)
-      if (typeof el.showPicker === 'function') {
-        try {
-          el.showPicker()
-          return
-        } catch (e) {
-          // ignore and fallback to focus
-        }
+    useEffect(() => {
+      const onDocClick = (e) => {
+        if (!wrapperRef.current) return
+        // If click is inside the launcher, keep open
+        if (wrapperRef.current.contains(e.target)) return
+        // If click is inside the portaled popover, keep open
+        if (e.target && e.target.closest && e.target.closest('.custom-datepicker-popover')) return
+        // If click is inside month/year modal, keep open
+        if (e.target && e.target.closest && (e.target.closest('.cdp-month-modal') || e.target.closest('.cdp-year-modal'))) return
+        setOpen(false)
       }
-      // Fallback to focus which should open picker on most browsers
-      try {
-        el.focus()
-        // For some browsers, sending a click helps
-        el.click()
-      } catch (e) {
-        /* ignore */
+      document.addEventListener('click', onDocClick)
+      return () => document.removeEventListener('click', onDocClick)
+    }, [])
+
+    useEffect(() => {
+      if (value) {
+        setViewYear(Number(String(value).slice(0,4)))
+        setViewMonth(Number(String(value).slice(5,7)) - 1)
       }
+    }, [value])
+
+    const [popoverStyle, setPopoverStyle] = useState(null)
+    const [pickerMode, setPickerMode] = useState('calendar') // 'calendar' | 'months' | 'year'
+
+    const openPicker = () => setOpen((s) => !s)
+
+    // compute popover position when opened
+    useEffect(() => {
+      if (!open) {
+        setPopoverStyle(null)
+        setPickerMode('calendar')
+        return
+      }
+      if (!wrapperRef.current) return
+      const rect = wrapperRef.current.getBoundingClientRect()
+      const top = rect.bottom + window.scrollY + 8
+      const left = rect.left + window.scrollX
+      // ensure popover stays within viewport horizontally
+      const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0)
+      const popoverWidth = 360
+      let adjustedLeft = left
+      if (left + popoverWidth > vw - 12) {
+        adjustedLeft = Math.max(12, vw - popoverWidth - 12)
+      }
+      setPopoverStyle({ position: 'absolute', top: `${top}px`, left: `${adjustedLeft}px`, width: `${popoverWidth}px` })
+    }, [open, viewMonth, viewYear])
+
+    const [showMonthModal, setShowMonthModal] = useState(false)
+    const [showYearModal, setShowYearModal] = useState(false)
+
+    const changeMonth = (delta) => {
+      let m = viewMonth + delta
+      let y = viewYear
+      if (m < 0) { m = 11; y -= 1 }
+      if (m > 11) { m = 0; y += 1 }
+      setViewMonth(m); setViewYear(y)
     }
 
+    const selectDay = (d) => {
+      const mm = String(viewMonth + 1).padStart(2, '0')
+      const dd = String(d).padStart(2, '0')
+      const iso = `${viewYear}-${mm}-${dd}`
+      onChange(iso)
+      setOpen(false)
+    }
+
+    const buildDays = (y, m) => {
+      const first = new Date(y, m, 1)
+      // map Monday=0
+      const firstWeekday = (first.getDay() + 6) % 7
+      const daysInMonth = new Date(y, m + 1, 0).getDate()
+      const cells = []
+      for (let i = 0; i < firstWeekday; i++) cells.push(null)
+      for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+      // pad to full weeks
+      while (cells.length % 7 !== 0) cells.push(null)
+      const weeks = []
+      for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+      return weeks
+    }
+
+    const weeks = buildDays(viewYear, viewMonth)
+
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
     return (
-      <div className="form-group" style={{ position: 'relative', display: 'inline-block' }}>
+      <div className="form-group" style={{ position: 'relative', display: 'inline-block' }} ref={wrapperRef}>
         <label htmlFor={id} style={{ display: 'block', cursor: 'pointer' }}>Ngày đánh</label>
         <div
           onClick={openPicker}
@@ -472,16 +609,17 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
             alignItems: 'center',
             gap: '8px',
             padding: '8px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--surface-weak)',
-            background: 'var(--bg-surface)',
+            borderRadius: '8px',
+            border: '1px solid var(--border)',
+            background: 'var(--card-bg)',
             minWidth: '160px',
             cursor: 'pointer',
             position: 'relative',
+            boxShadow: 'var(--shadow)'
           }}
         >
           <span style={{ fontSize: '0.95rem' }}>{formatDisplayDate(value) || 'Chọn ngày'}</span>
-          <span style={{ marginLeft: 'auto', opacity: 0.7 }}>📅</span>
+          <span style={{ marginLeft: 'auto', opacity: 0.8 }}>📅</span>
 
           <input
             ref={inputRef}
@@ -501,11 +639,130 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
               cursor: 'pointer',
               zIndex: 3,
               background: 'transparent',
-              WebkitAppearance: 'none',
-              MozAppearance: 'none',
             }}
             aria-label="Chọn ngày"
           />
+
+          {open && popoverStyle && createPortal(
+            <div
+              className="custom-datepicker-popover"
+              role="dialog"
+              aria-modal="true"
+              style={popoverStyle}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="cdp-header">
+                <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); changeMonth(-1) }}>‹</button>
+                <div className="cdp-month-year">
+                  <button type="button" className="cdp-month-button" onClick={(e) => { e.stopPropagation(); setShowMonthModal(true) }}>
+                    <strong>{monthNames[viewMonth]}</strong>
+                  </button>
+                  <button type="button" className="cdp-year-button" onClick={(e) => { e.stopPropagation(); setShowYearModal(true) }}>
+                    <div className="cdp-year">{viewYear}</div>
+                  </button>
+                </div>
+                <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); changeMonth(1) }}>›</button>
+              </div>
+              {pickerMode === 'calendar' && (
+                <>
+                  <div className="cdp-weekdays">
+                    <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div>
+                  </div>
+                  <div className="cdp-grid">
+                    {weeks.map((week, wi) => (
+                      <div className="cdp-week" key={wi}>
+                        {week.map((d, di) => {
+                          const isToday = d && new Date().toISOString().slice(0,10) === `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                          const selected = d && value === `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                          return (
+                            <button
+                              key={di}
+                              type="button"
+                              className={`cdp-day ${d ? '' : 'empty'} ${isToday ? 'today' : ''} ${selected ? 'selected' : ''}`}
+                              onClick={() => d && selectDay(d)}
+                              disabled={!d}
+                            >
+                              {d || ''}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {pickerMode === 'months' && (
+                <div className="cdp-months-grid">
+                  {monthNames.map((m, idx) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`cdp-month ${idx === viewMonth ? 'selected' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); setViewMonth(idx); setPickerMode('calendar') }}
+                    >
+                      {m.slice(0,3)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {pickerMode === 'year' && (
+                <div className="cdp-year-picker">
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+                    <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y - 1) }}>-</button>
+                    <input
+                      type="number"
+                      value={viewYear}
+                      onChange={(e) => setViewYear(Number(e.target.value) || viewYear)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setPickerMode('calendar') } }}
+                      onBlur={() => setPickerMode('calendar')}
+                      style={{ width: 80, textAlign: 'center' }}
+                    />
+                    <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y + 1) }}>+</button>
+                  </div>
+                </div>
+              )}
+            </div>,
+            document.body
+          )}
+          {showMonthModal && createPortal(
+            <div className="cdp-month-modal" style={{position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1400}} onClick={() => setShowMonthModal(false)}>
+              <div className="card" style={{ width: '100%', maxWidth: '420px', padding: 12 }} onClick={(e) => e.stopPropagation()}>
+                <div className="card-title" style={{ justifyContent: 'space-between' }}>
+                  <span>Chọn tháng</span>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowMonthModal(false)}>Đóng</button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '8px 4px' }}>
+                  {monthNames.map((m, idx) => (
+                    <button key={m} type="button" className={`cdp-month ${idx === viewMonth ? 'selected' : ''}`} onClick={(e) => { e.stopPropagation(); setViewMonth(idx); setShowMonthModal(false) }}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>, document.body
+          )}
+
+          {showYearModal && createPortal(
+            <div className="cdp-year-modal" style={{position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1400}} onClick={() => setShowYearModal(false)}>
+              <div className="card" style={{ width: '100%', maxWidth: '320px', padding: 12 }} onClick={(e) => e.stopPropagation()}>
+                <div className="card-title" style={{ justifyContent: 'space-between' }}>
+                  <span>Chọn năm</span>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowYearModal(false)}>Đóng</button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', padding: '8px 4px' }}>
+                  <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y - 1) }}>-</button>
+                  <input type="number" value={viewYear} onChange={(e) => setViewYear(Number(e.target.value) || viewYear)} style={{ width: 100, textAlign: 'center' }} />
+                  <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y + 1) }}>+</button>
+                </div>
+                <div style={{ textAlign: 'center', marginTop: 8 }}>
+                  <button className="btn btn-primary" onClick={() => setShowYearModal(false)}>OK</button>
+                </div>
+              </div>
+            </div>, document.body
+          )}
         </div>
       </div>
     )
@@ -519,21 +776,18 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
       </div>
 
       <div className="card">
-        <div className="card-title">💰 Thêm khoản chi</div>
-        <button type="button" className="btn btn-primary" style={{ width: '100%' }} onClick={() => setIsEntryModalOpen(true)}>
-          + Thêm khoản chi
-        </button>
-      </div>
-
-      <div className="card">
-        <div className="card-title">
+        <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           📋 Danh sách chi phí ({entries.length} khoản)
+          <button type="button" className="btn btn-primary"  onClick={() => setIsEntryModalOpen(true)}>
+          + Thêm khoản chi
+          </button>
         </div>
+        
         <div className="table-wrap">
           <table className="result-table">
             <colgroup>
-              <col style={{ width: '88px' }} />
-              <col style={{ width: '92px' }} />
+              <col style={{ width: '120px' }} />
+              <col style={{ width: '24px' }} />
               <col style={{ width: '92px' }} />
               <col />
               <col style={{ width: '84px' }} />
@@ -587,8 +841,8 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
                               <div
                                 style={{
                                   display: 'grid',
-                                  gridTemplateColumns: `repeat(${Math.max(playerColumns.length, 1)}, minmax(42px, 1fr))`,
-                                  gap: '1px',
+                                  gridTemplateColumns: `repeat(${Math.max(playerColumns.length, 1)}, minmax(1px, 1fr))`,
+                                  gap: '4px',
                                   width: '100%',
                                 }}
                               >
@@ -656,31 +910,53 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
           <thead>
             <tr>
               <th>Người chơi</th>
-              <th>Số tiền</th>
+              <th>Loại chi phí</th>
+              <th>Chia đều (/người)</th>
             </tr>
           </thead>
           <tbody>
-            {Object.entries(totals).length === 0 ? (
+            {entries.length === 0 ? (
               <tr>
-                <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                   Chưa có dữ liệu tạm tính.
                 </td>
               </tr>
             ) : (
-              <>
-                {Object.entries(totals)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([idOrName, amount]) => (
-                    <tr key={idOrName}>
-                      <td>{idToName[idOrName] || idOrName}</td>
-                      <td>{formatMoney(Math.round(amount * 1000))}</td>
+              (() => {
+                const detail = {}
+                entries.forEach((entry) => {
+                  const label = String(getEntryLabel(entry, expenseTypes) || entry.type)
+                  const people = entry.people || []
+                  const share = (entry.amount || 0) / Math.max(people.length, 1)
+                  people.forEach((p) => {
+                    const name = idToName[p] || p
+                    if (!detail[name]) detail[name] = { total: 0, types: {} }
+                    detail[name].total += share
+                    detail[name].types[label] = (detail[name].types[label] || 0) + share
+                  })
+                })
+
+                const rows = Object.entries(detail).sort((a, b) => b[1].total - a[1].total).map(([name, data]) => (
+                  <tr key={name}>
+                    <td>{name}</td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      {Object.entries(data.types).map(([tLabel, amt]) => `${tLabel}: ${formatMoney(Math.round(amt * 1000))}`).join(', ')}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.9rem' }}>{formatMoney(Math.round(data.total * 1000))}</td>
+                  </tr>
+                ))
+
+                return (
+                  <>
+                    {rows}
+                    <tr className="result-total">
+                      <td>Tổng cộng</td>
+                      <td />
+                      <td>{formatMoney(Math.round(grandTotal * 1000))}</td>
                     </tr>
-                  ))}
-                <tr className="result-total">
-                  <td>Tổng cộng</td>
-                  <td>{formatMoney(Math.round(grandTotal * 1000))}</td>
-                </tr>
-              </>
+                  </>
+                )
+              })()
             )}
           </tbody>
         </table>
@@ -723,11 +999,13 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
               <EntryForm
                 key={entries.length}
                 onAdd={handleAddEntry}
+                onAdded={() => setIsEntryModalOpen(false)}
                 lastPeople={lastPeople}
                 lastPayer={lastPayer}
                 lastType={lastType}
                 players={players}
                 expenseTypes={expenseTypes}
+                combos={combos}
                 onAddName={onAddPlayerName}
                 onAddExpenseType={onAddExpenseType}
               />
@@ -774,6 +1052,7 @@ export default function SessionForm({ session, players = [], expenseTypes, onAdd
                 entry={editingEntry}
                 players={players}
                 expenseTypes={expenseTypes}
+                combos={combos}
                 onAddName={onAddPlayerName}
                 onSave={handleUpdateEntry}
                 onCancel={() => setEditingEntry(null)}

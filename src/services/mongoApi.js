@@ -89,3 +89,21 @@ export async function updateExpenseType(value, updated) {
 export async function removeExpenseType(value) {
   return api('DELETE', `/expense-types/${value}`)
 }
+
+/** Combos (T3 / T7) APIs */
+export async function getAllCombos() {
+  return api('GET', '/combos')
+}
+
+export async function upsertCombos(list) {
+  if (!list || !list.length) return
+  return api('POST', '/combos/bulk', list)
+}
+
+export async function updateCombo(label, updated) {
+  return api('PUT', `/combos/${encodeURIComponent(label)}`, updated)
+}
+
+export async function removeCombo(label) {
+  return api('DELETE', `/combos/${encodeURIComponent(label)}`)
+}
