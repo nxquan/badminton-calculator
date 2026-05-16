@@ -8,10 +8,15 @@ function calcStats(sessions, expenseTypes = []) {
     for (const entry of session.entries) {
       if (!entry.people || entry.people.length === 0 || entry.amount <= 0) continue
       const perPerson = entry.amount / entry.people.length
-      for (const person of entry.people) {
-        if (!stats[person]) stats[person] = {}
-        if (!stats[person][entry.type]) stats[person][entry.type] = 0
-        stats[person][entry.type] += perPerson
+      for (const rawPerson of entry.people) {
+        // Normalize person key: may be an id string, a name string, or an object { id, name }
+        let personKey = rawPerson
+        if (rawPerson && typeof rawPerson === 'object') {
+          personKey = rawPerson.id || rawPerson.name || String(rawPerson)
+        }
+        if (!stats[personKey]) stats[personKey] = {}
+        if (!stats[personKey][entry.type]) stats[personKey][entry.type] = 0
+        stats[personKey][entry.type] += perPerson
       }
     }
   }
@@ -38,7 +43,7 @@ function getMonthlyRank(index) {
   return null
 }
 
-export default function Stats({ sessions, expenseTypes = [] }) {
+export default function Stats({ sessions, expenseTypes = [], players = [] }) {
   const [filterType, setFilterType] = useState('month')
   const [filterValue, setFilterValue] = useState('')
   const isMonthlyView = filterType === 'month'
@@ -53,6 +58,46 @@ export default function Stats({ sessions, expenseTypes = [] }) {
   }, [sessions, filterType, filterValue])
 
   const stats = useMemo(() => calcStats(filteredSessions, expenseTypes), [filteredSessions, expenseTypes])
+  const idToName = useMemo(() => Object.fromEntries((players || []).map((p) => [p.id, p.name])), [players])
+
+  // normalize stats keys (ids) to names
+  const statsByName = useMemo(() => {
+    const out = {}
+    for (const key of Object.keys(stats)) {
+      // Try resolve key as id first, then as existing player name, otherwise look into sessions
+      let name = idToName[key]
+
+      if (!name) {
+        const found = (players || []).find((p) => p.id === key || p.name === key)
+        if (found) name = found.name
+      }
+
+      // Fallback: search filteredSessions for a matching person object that contains a name
+      if (!name) {
+        for (const session of filteredSessions) {
+          for (const entry of session.entries || []) {
+            const people = entry.people || []
+            for (const p of people) {
+              if (p && typeof p === 'object' && (String(p.id) === key || p.name === key)) {
+                name = p.name || String(p.id)
+                break
+              }
+              if ((typeof p === 'string' && p === key)) {
+                name = p
+                break
+              }
+            }
+            if (name) break
+          }
+          if (name) break
+        }
+      }
+
+      if (!name) name = key
+      out[name] = { ...(out[name] || {}), ...(stats[key] || {}) }
+    }
+    return out
+  }, [stats, idToName, players, filteredSessions])
 
   // Get all expense types used in filtered sessions
   const usedExpenseTypes = useMemo(() => {
@@ -69,9 +114,9 @@ export default function Stats({ sessions, expenseTypes = [] }) {
     return sortExpenseTypes(typeArray)
   }, [filteredSessions, expenseTypes])
 
-  const rows = sortPlayerNames(Object.keys(stats))
+  const rows = sortPlayerNames(Object.keys(statsByName))
     .map((name) => {
-      const totals = { ...stats[name] }
+      const totals = { ...statsByName[name] }
       const total = Object.values(totals).reduce((s, v) => s + v, 0)
       return {
         name,

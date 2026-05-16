@@ -1,20 +1,26 @@
 import { useEffect, useId, useMemo, useState, useCallback, useRef, Fragment } from 'react'
 import { PLAYERS, COMBOS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
 
-function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCustomNameChange }) {
-  const sortedNames = useMemo(() => sortPlayerNames(names), [names])
-  const displayNames = useMemo(
-    () => sortPlayerNames([...sortedNames, ...selected]),
-    [sortedNames, selected]
-  )
-  const allSelected = sortedNames.length > 0 && sortedNames.every((p) => selected.includes(p))
+function PeoplePicker({ selected, onToggle, players = [], onAddName, customName, onCustomNameChange }) {
+  const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
+  const displayPlayers = useMemo(() => {
+    const ids = new Set(sortedPlayers.map((p) => p.id))
+    // include selected ids that may not be in players list
+    const extras = selected.filter((id) => !ids.has(id)).map((id) => ({ id, name: id }))
+    return [...sortedPlayers, ...extras]
+  }, [sortedPlayers, selected])
 
-  const isComboActive = (combo) =>
-    combo.members.every((m) => selected.includes(m)) &&
-    selected.every((s) => combo.members.includes(s))
+  const allSelected = sortedPlayers.length > 0 && sortedPlayers.every((p) => selected.includes(p.id))
+
+  const isComboActive = (combo) => {
+    // combo.members are names; map to ids
+    const memberIds = combo.members.map((name) => players.find((p) => p.name === name)?.id).filter(Boolean)
+    return memberIds.length > 0 && memberIds.every((m) => selected.includes(m)) && selected.every((s) => memberIds.includes(s))
+  }
 
   const handleCombo = (combo) => {
-    onToggle(isComboActive(combo) ? [] : [...combo.members])
+    const memberIds = combo.members.map((name) => players.find((p) => p.name === name)?.id).filter(Boolean)
+    onToggle(isComboActive(combo) ? [] : [...memberIds])
   }
 
   return (
@@ -34,7 +40,7 @@ function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCust
           type="button"
           className="btn btn-outline btn-sm"
           onClick={() => {
-            const next = allSelected ? [] : [...sortedNames]
+            const next = allSelected ? [] : sortedPlayers.map((p) => p.id)
             onToggle(next)
           }}
         >
@@ -46,19 +52,19 @@ function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCust
       </div>
       
       <div className="people-picker">
-        {displayNames.map((name) => (
+        {displayPlayers.map((p) => (
           <button
-            key={name}
+            key={p.id}
             type="button"
-            className={`people-chip ${selected.includes(name) ? 'selected' : ''}`}
+            className={`people-chip ${selected.includes(p.id) ? 'selected' : ''}`}
             onClick={() => {
-              const next = selected.includes(name)
-                ? selected.filter((n) => n !== name)
-                : [...selected, name]
+              const next = selected.includes(p.id)
+                ? selected.filter((n) => n !== p.id)
+                : [...selected, p.id]
               onToggle(next)
             }}
           >
-            {name}
+            {p.name}
           </button>
         ))}
       </div>
@@ -67,7 +73,7 @@ function PeoplePicker({ selected, onToggle, names, onAddName, customName, onCust
 }
 
 
-function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes, onAddName, onAddExpenseType, onAdded }) {
+function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names = [], expenseTypes, onAddName, onAddExpenseType, onAdded }) {
   const [type, setType] = useState(lastType)
   const [hours, setHours] = useState(type === 'san' ? '2' : '')
   const [amount, setAmount] = useState(type === 'san' ? 240 : '')
@@ -75,6 +81,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
   const [people, setPeople] = useState(lastPeople)
   const [payer, setPayer] = useState(lastPayer)
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
+  const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -174,9 +181,9 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
           <label>Người trả</label>
           <select value={payer} onChange={(e) => setPayer(e.target.value)}>
             <option value="">-- Chọn người trả --</option>
-            {sortPlayerNames([...names, ...people]).map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {sortedPlayers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
             ))}
           </select>
@@ -190,7 +197,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
         <PeoplePicker 
           selected={people} 
           onToggle={setPeople} 
-          names={names} 
+          players={players}
           onAddName={onAddName}
           customName=""
           onCustomNameChange={() => {}}
@@ -214,7 +221,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, names, expenseTypes
   )
 }
 
-function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel }) {
+function EditEntryForm({ entry, players = [], expenseTypes, onAddName, onSave, onCancel }) {
   const [type, setType] = useState(entry.type)
   const [hours, setHours] = useState(entry.hours ? String(entry.hours) : '')
   const [amount, setAmount] = useState(String(entry.amount))
@@ -223,7 +230,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
   const [people, setPeople] = useState(entry.people)
   const [customName, setCustomName] = useState('')
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
-  const personNames = useMemo(() => sortPlayerNames([...names, payer, ...people]), [names, payer, people])
+  const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
 
   useEffect(() => {
     setType(entry.type)
@@ -311,9 +318,9 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
           <label>Người trả</label>
           <select value={payer} onChange={(e) => setPayer(e.target.value)}>
             <option value="">-- Chọn người trả --</option>
-            {personNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {sortedPlayers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
             ))}
           </select>
@@ -324,7 +331,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
         <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
           Người tham gia
         </label>
-        <PeoplePicker selected={people} onToggle={setPeople} names={names} onAddName={onAddName} customName={customName} onCustomNameChange={setCustomName} />
+        <PeoplePicker selected={people} onToggle={setPeople} players={players} onAddName={onAddName} customName={customName} onCustomNameChange={setCustomName} />
       </div>
 
       <div className="actions-bar">
@@ -344,7 +351,7 @@ function EditEntryForm({ entry, names, expenseTypes, onAddName, onSave, onCancel
   )
 }
 
-export default function SessionForm({ session, names, expenseTypes, onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
+export default function SessionForm({ session, players = [], expenseTypes, onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
   const [date, setDate] = useState(session.date || new Date().toISOString().split('T')[0])
   const dateInputId = useId()
   const [entries, setEntries] = useState(session.entries || [])
@@ -382,14 +389,13 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
 
   const totals = calculateTotals(entries)
   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
-  const playerNames = useMemo(
-    () => sortPlayerNames([...names, ...entries.flatMap((entry) => [entry.payer, ...(entry.people || [])])]),
-    [entries, names]
-  )
-  const playerColumns = useMemo(
-    () => sortPlayerNames([...new Set([...names, ...entries.flatMap((entry) => entry.people || [])])]),
-    [entries, names]
-  )
+  const idToName = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p.name])), [players])
+  const participantNames = useMemo(() => {
+    return sortPlayerNames(entries.flatMap((entry) => [idToName[entry.payer] || entry.payer, ...(entry.people || []).map((p) => idToName[p] || p)]))
+  }, [entries, idToName])
+  const playerColumns = useMemo(() => {
+    return sortPlayerNames([...new Set(entries.flatMap((entry) => (entry.people || []).map((p) => idToName[p] || p)))])
+  }, [entries, idToName])
 
   const sortedEntries = useMemo(() => {
     const orderMap = sortExpenseTypes(expenseTypes || []).reduce((m, t, i) => {
@@ -572,7 +578,7 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
                               </span>
                             </td>
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              {entry.payer}
+                              {idToName[entry.payer] || entry.payer}
                             </td>
                             <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
                               {formatMoney(entry.amount * 1000)}
@@ -586,26 +592,31 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
                                   width: '100%',
                                 }}
                               >
-                                {playerColumns.map((name) => (
-                                  <span
-                                    key={name}
-                                    style={{
-                                      backgroundColor: entry.people.includes(name) ? 'rgba(73, 101, 243, 0.2)' : 'transparent',
-                                      padding: '1px 3px',
-                                      borderRadius: '3px',
-                                      fontWeight: 500,
-                                      fontSize: '0.7rem',
-                                      whiteSpace: 'nowrap',
-                                      textAlign: 'center',
-                                      minHeight: '18px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                    }}
-                                  >
-                                    {entry.people.includes(name) ? name : ''}
-                                  </span>
-                                ))}
+                                {playerColumns.map((name) => {
+                                  const playerObj = players.find((p) => p.name === name)
+                                  const id = playerObj ? playerObj.id : null
+                                  const active = id ? entry.people.includes(id) : entry.people.includes(name)
+                                  return (
+                                    <span
+                                      key={name}
+                                      style={{
+                                        backgroundColor: active ? 'rgba(73, 101, 243, 0.2)' : 'transparent',
+                                        padding: '1px 3px',
+                                        borderRadius: '3px',
+                                        fontWeight: 500,
+                                        fontSize: '0.7rem',
+                                        whiteSpace: 'nowrap',
+                                        textAlign: 'center',
+                                        minHeight: '18px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      {active ? name : ''}
+                                    </span>
+                                  )
+                                })}
                               </div>
                             </td>
                             <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
@@ -659,9 +670,9 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
               <>
                 {Object.entries(totals)
                   .sort((a, b) => b[1] - a[1])
-                  .map(([name, amount]) => (
-                    <tr key={name}>
-                      <td>{name}</td>
+                  .map(([idOrName, amount]) => (
+                    <tr key={idOrName}>
+                      <td>{idToName[idOrName] || idOrName}</td>
                       <td>{formatMoney(Math.round(amount * 1000))}</td>
                     </tr>
                   ))}
@@ -715,7 +726,7 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
                 lastPeople={lastPeople}
                 lastPayer={lastPayer}
                 lastType={lastType}
-                names={playerNames}
+                players={players}
                 expenseTypes={expenseTypes}
                 onAddName={onAddPlayerName}
                 onAddExpenseType={onAddExpenseType}
@@ -761,7 +772,7 @@ export default function SessionForm({ session, names, expenseTypes, onAddPlayerN
             <div style={{ flex: 1, overflow: 'auto', paddingBottom: '16px' }}>
               <EditEntryForm
                 entry={editingEntry}
-                names={playerNames}
+                players={players}
                 expenseTypes={expenseTypes}
                 onAddName={onAddPlayerName}
                 onSave={handleUpdateEntry}

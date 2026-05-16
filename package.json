@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "migrate:players": "node scripts/migrate_players.js",
     "dev": "concurrently -n server,frontend -c blue,green \"npm run dev:server\" \"npm run dev:frontend\"",
     "dev:server": "node server.js",
     "dev:frontend": "vite --host --open",

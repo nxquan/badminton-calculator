@@ -23,8 +23,13 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
   }, [sessions])
 
   const filteredSessions = useMemo(() => {
-    if (!monthFilter) return sessions
-    return sessions.filter((s) => String(s.date || '').startsWith(monthFilter))
+    const list = monthFilter ? sessions.filter((s) => String(s.date || '').startsWith(monthFilter)) : sessions.slice()
+    // Sort by date descending (newest first)
+    return list.slice().sort((a, b) => {
+      const ta = a && a.date ? new Date(a.date).getTime() : 0
+      const tb = b && b.date ? new Date(b.date).getTime() : 0
+      return tb - ta
+    })
   }, [sessions, monthFilter])
 
   useEffect(() => {
@@ -74,8 +79,8 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                 {filteredSessions.map((session) => {
                   const totals = calculateTotals(session.entries)
                   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
-                  const playerCount = new Set(session.entries.flatMap((e) => e.people)).size
-                  const isSpecialSession = session.entries.some((e) => (e.people || []).includes('Khánh'))
+                  const playerCount = new Set(session.entries.flatMap((e) => e.people.map(p => p.id))).size
+                  const isSpecialSession = session.entries.some((e) => (e.people || []).some((person) => person.name === 'Khánh'))
                   
                   // Calculate total hours
                   const totalHours = session.entries

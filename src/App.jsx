@@ -56,7 +56,7 @@ function saveSessions(sessions) {
 
 export default function App() {
   const [sessions, setSessions] = useState(loadSessions)
-  const [playerNames, setPlayerNames] = useState([])
+  const [players, setPlayers] = useState([]) // array of { id, name }
   const [expenseTypes, setExpenseTypes] = useState(DEFAULT_EXPENSE_TYPES)
   const [currentSession, setCurrentSession] = useState(null)
   const [viewingSession, setViewingSession] = useState(null)
@@ -69,7 +69,7 @@ export default function App() {
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false)
   const [playerInputValue, setPlayerInputValue] = useState('')
   const [isEditPlayerModalOpen, setIsEditPlayerModalOpen] = useState(false)
-  const [editPlayerOldName, setEditPlayerOldName] = useState('')
+  const [editPlayerId, setEditPlayerId] = useState('')
   const [editPlayerNewName, setEditPlayerNewName] = useState('')
   
   const [isAddExpenseTypeModalOpen, setIsAddExpenseTypeModalOpen] = useState(false)
@@ -84,22 +84,53 @@ export default function App() {
   const [newSessionDate, setNewSessionDate] = useState(new Date().toISOString().split('T')[0])
   const [isEditingSessionInModal, setIsEditingSessionInModal] = useState(false)
 
-  const persistPlayerNames = useCallback((names) => {
-    if (!names.length) return
-    const nextNames = sortPlayerNames(names)
-    setPlayerNames((prev) => sortPlayerNames([...prev, ...nextNames]))
-    if (mongoApi.isConfigured) {
-      mongoApi.upsertPlayers(nextNames).catch(console.error)
+  const getNameById = useCallback((id) => {
+    const p = players.find((pp) => pp.id === id)
+    return p ? p.name : id
+  }, [players])
+
+  const getIdByName = useCallback((name) => {
+    const p = players.find((pp) => pp.name === name)
+    return p ? p.id : null
+  }, [players])
+
+  const ensurePlayersForNames = useCallback(async (names) => {
+    const toCreate = []
+    for (const name of names) {
+      if (!name) continue
+      if (!players.some((p) => p.name === name)) {
+        const id = crypto.randomUUID()
+        toCreate.push({ id, name })
+      }
     }
-  }, [])
+    if (toCreate.length === 0) return
+    setPlayers((prev) => [...prev, ...toCreate])
+    if (mongoApi.isConfigured) {
+      try {
+        await mongoApi.upsertPlayers(toCreate)
+        const fresh = await mongoApi.getAllPlayers()
+        setPlayers(Array.isArray(fresh) ? fresh : [])
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }, [players])
 
   const extractNamesFromSession = useCallback((session) => {
-    return getSessionPeople([session])
-  }, [])
+    // returns array of names (resolve ids to names if needed)
+    const raw = getSessionPeople([session])
+    return raw.map((r) => {
+      // if r matches an id in players, return name
+      const found = players.find((p) => p.id === r)
+      return found ? found.name : r
+    })
+  }, [players])
 
   const handleAddPlayerName = useCallback((name) => {
-    persistPlayerNames([name])
-  }, [persistPlayerNames])
+    ensurePlayersForNames([name])
+  }, [ensurePlayersForNames])
+
+  const playerNames = useMemo(() => sortPlayerNames(players.map((p) => p.name)), [players])
 
   const persistExpenseTypes = useCallback((types) => {
     if (!types.length) return
@@ -119,10 +150,19 @@ export default function App() {
     if (!mongoApi.isConfigured) return
     setDbStatus('loading')
     Promise.allSettled([mongoApi.getAllSessions(), mongoApi.getAllPlayers(), mongoApi.getAllExpenseTypes()])
-      .then(([sessionsResult, namesResult, typesResult]) => {
+      .then(async ([sessionsResult, playersResult, typesResult]) => {
         const localSessions = loadSessions()
         const docs = sessionsResult.status === 'fulfilled' ? sessionsResult.value : []
-        const names = namesResult.status === 'fulfilled' ? namesResult.value : []
+        const fetchedPlayersRaw = playersResult.status === 'fulfilled' ? playersResult.value : []
+        // players: API returns array of { id, name } or legacy array of strings
+        let resolvedPlayers = []
+        if (Array.isArray(fetchedPlayersRaw) && fetchedPlayersRaw.length && typeof fetchedPlayersRaw[0] === 'string') {
+          // legacy: convert strings to objects with generated ids
+          resolvedPlayers = fetchedPlayersRaw.map((n) => ({ id: crypto.randomUUID(), name: n }))
+        } else if (Array.isArray(fetchedPlayersRaw)) {
+          resolvedPlayers = fetchedPlayersRaw
+        }
+        setPlayers(resolvedPlayers)
         const types = typesResult.status === 'fulfilled' ? typesResult.value : []
         const resolvedSessions = docs.length > 0 ? docs : localSessions
 
@@ -133,12 +173,16 @@ export default function App() {
         setSessions(resolvedSessions)
         saveSessions(resolvedSessions)
 
-        const derivedNames = getSessionPeople(resolvedSessions)
-        const resolvedNames = sortPlayerNames(names)
-        setPlayerNames(resolvedNames)
-
-        if (names.length === 0 && derivedNames.length > 0) {
-          mongoApi.upsertPlayers(derivedNames).catch(console.error)
+        // If no players in DB but sessions have names, ensure players exist
+        const derived = getSessionPeople(resolvedSessions)
+        if (resolvedPlayers.length === 0 && derived.length > 0) {
+          const toCreate = [...new Set(derived)].map((n) => ({ id: crypto.randomUUID(), name: n }))
+          try {
+            await mongoApi.upsertPlayers(toCreate)
+            setPlayers((prev) => [...prev, ...toCreate])
+          } catch (err) {
+            console.error(err)
+          }
         }
 
         const resolvedTypes = sortExpenseTypes([...DEFAULT_EXPENSE_TYPES, ...types])
@@ -162,7 +206,7 @@ export default function App() {
 
   const handleSaveSession = useCallback((session) => {
     const isExisting = sessions.some((item) => item.id === session.id)
-    persistPlayerNames(extractNamesFromSession(session))
+    ensurePlayersForNames(extractNamesFromSession(session))
     setSessions((prev) => {
       const next = isExisting
         ? prev.map((item) => (item.id === session.id ? session : item))
@@ -180,7 +224,7 @@ export default function App() {
         mongoApi.insertSession(session).catch(console.error)
       }
     }
-  }, [extractNamesFromSession, persistPlayerNames, sessions])
+  }, [extractNamesFromSession, ensurePlayersForNames, sessions])
 
   const handleDeleteSession = useCallback((id) => {
     setSessions((prev) => {
@@ -197,7 +241,7 @@ export default function App() {
   }, [viewingSession])
 
   const handleUpdateSession = useCallback((updatedSession) => {
-    persistPlayerNames(extractNamesFromSession(updatedSession))
+    ensurePlayersForNames(extractNamesFromSession(updatedSession))
     setSessions((prev) => {
       const next = prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
       saveSessions(next)
@@ -209,7 +253,7 @@ export default function App() {
     if (mongoApi.isConfigured) {
       mongoApi.updateSession(updatedSession).catch(console.error)
     }
-  }, [extractNamesFromSession, persistPlayerNames])
+  }, [extractNamesFromSession, ensurePlayersForNames])
 
   const handleNewSession = useCallback(() => {
     setNewSessionDate(new Date().toISOString().split('T')[0])
@@ -235,11 +279,31 @@ export default function App() {
     setIsEditingSessionInModal(false)
   }, [isEditingSessionInModal])
 
-  const handleEditSession = useCallback((session) => {
-    setCurrentSession(session)
+  const handleEditSession = useCallback(async (session) => {
+    // Ensure players exist for any legacy names in session, then normalize entries to ids
+    await ensurePlayersForNames(extractNamesFromSession(session))
+    let freshPlayers = players
+    if (mongoApi.isConfigured) {
+      try {
+        const fetched = await mongoApi.getAllPlayers()
+        if (Array.isArray(fetched) && fetched.length) freshPlayers = fetched
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    const nameToId = Object.fromEntries((freshPlayers || []).map((p) => [p.name, p.id]))
+    const normalized = {
+      ...session,
+      entries: (session.entries || []).map((entry) => ({
+        ...entry,
+        payer: nameToId[entry.payer] || entry.payer,
+        people: (entry.people || []).map((p) => nameToId[p] || p),
+      })),
+    }
+    setCurrentSession(normalized)
     setIsEditingSessionInModal(true)
     setIsAddSessionModalOpen(true)
-  }, [])
+  }, [ensurePlayersForNames, extractNamesFromSession, players])
 
   const handleExport = useCallback(() => {
     const data = JSON.stringify(sessions, null, 2)
@@ -262,7 +326,7 @@ export default function App() {
         if (!Array.isArray(imported)) return alert('File không hợp lệ')
         const existingIds = new Set(sessions.map((s) => s.id))
         const newOnes = imported.filter((s) => !existingIds.has(s.id))
-        persistPlayerNames(getSessionPeople(newOnes))
+        ensurePlayersForNames(getSessionPeople(newOnes))
         setSessions((prev) => {
           const merged = [...newOnes, ...prev]
           saveSessions(merged)
@@ -280,51 +344,50 @@ export default function App() {
     e.target.value = ''
   }, [])
 
-  const handleEditPlayer = useCallback((oldName, newName) => {
-    setPlayerNames((prev) => prev.map((n) => (n === oldName ? newName : n)))
-    
-    // Update all sessions containing this player
-    setSessions((prev) => {
-      const updated = prev.map((session) => ({
-        ...session,
-        entries: (session.entries || []).map((entry) => ({
-          ...entry,
-          payer: entry.payer === oldName ? newName : entry.payer,
-          people: (entry.people || []).map((p) => p === oldName ? newName : p),
-        })),
-      }))
-      saveSessions(updated)
-      if (mongoApi.isConfigured) {
-        updated.forEach((session) => {
-          mongoApi.updateSession(session).catch(console.error)
-        })
-      }
-      return updated
-    })
-    
-    // Update currently viewing session if affected
-    setViewingSession((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        entries: (prev.entries || []).map((entry) => ({
-          ...entry,
-          payer: entry.payer === oldName ? newName : entry.payer,
-          people: (entry.people || []).map((p) => p === oldName ? newName : p),
-        })),
-      }
-    })
-    
+  const handleEditPlayer = useCallback((player, newName) => {
+    // player: object { id, name } passed from PlayersPage
+    const id = player.id
+    const newNameTrim = String(newName || '').trim()
+    if (!newNameTrim || newNameTrim === player.name) return
+    setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, name: newNameTrim } : p)))
+
+    // No need to update sessions (they reference ids). Only persist player name change.
     if (mongoApi.isConfigured) {
-      mongoApi.updatePlayer(oldName, newName).catch(console.error)
+      mongoApi.updatePlayer(id, newNameTrim).catch(console.error)
     }
   }, [])
 
-  const handleDeletePlayer = useCallback((name) => {
-    // remove from player list; sessions remain unchanged
-    setPlayerNames((prev) => prev.filter((n) => n !== name))
-    if (mongoApi.isConfigured) {
-      mongoApi.removePlayer(name).catch(console.error)
+  const handleDeletePlayer = useCallback(async (player) => {
+    // Prevent deletion if player appears in any existing sessions (local check)
+    const inUseLocal = sessions.some((s) => (s.entries || []).some((e) => {
+      // payer may be id or name or object
+      const payerMatch = e.payer === player.id || e.payer === player.name || (e.payer && e.payer.id === player.id) || (e.payer && e.payer.name === player.name)
+      // people may be array of ids, names, or objects
+      const people = e.people || []
+      const peopleMatch = people.includes && (people.includes(player.id) || people.includes(player.name)) || people.some && people.some((p) => (p && (p.id === player.id || p.name === player.name)))
+      return payerMatch || peopleMatch
+    }))
+    if (inUseLocal) return alert('Không thể xóa: người chơi đã tham gia session')
+
+    // Only remove locally after backend confirms deletion. If no backend, allow local delete.
+    if (!mongoApi.isConfigured) {
+      setPlayers((prev) => prev.filter((p) => p.id !== player.id))
+      return
+    }
+
+    try {
+      await mongoApi.removePlayer(player.id)
+      setPlayers((prev) => prev.filter((p) => p.id !== player.id))
+    } catch (err) {
+      console.error('Delete player error:', err)
+      const msg = String(err.message || '')
+      if (msg.includes('player_in_sessions') || msg.includes('409')) {
+        alert('Không thể xóa: người chơi đã tham gia session')
+      } else if (msg.includes('404')) {
+        alert('Người chơi không tồn tại')
+      } else {
+        alert('Lỗi khi xóa người chơi: ' + (err.message || err))
+      }
     }
   }, [])
 
@@ -365,12 +428,15 @@ export default function App() {
 
   const handleUpdatePlayerFromModal = useCallback(() => {
     const newName = editPlayerNewName.trim()
-    if (!newName || newName === editPlayerOldName) return
-    handleEditPlayer(editPlayerOldName, newName)
+    if (!newName) return
+    // find player by id
+    const player = players.find((p) => p.id === editPlayerId)
+    if (!player || player.name === newName) return
+    handleEditPlayer(player, newName)
     setIsEditPlayerModalOpen(false)
-    setEditPlayerOldName('')
+    setEditPlayerId('')
     setEditPlayerNewName('')
-  }, [editPlayerOldName, editPlayerNewName, handleEditPlayer])
+  }, [editPlayerId, editPlayerNewName, handleEditPlayer, players])
 
   const handleUpdateExpenseTypeFromModal = useCallback(() => {
     const label = editExpenseTypeLabel.trim()
@@ -383,6 +449,7 @@ export default function App() {
   }, [editExpenseTypeValue, editExpenseTypeLabel, editExpenseTypeEmoji, handleEditExpenseType])
 
   const playerStats = useMemo(() => {
+    const playerNames = sortPlayerNames(players.map((p) => p.name))
     const stats = {}
     for (const name of playerNames) {
       stats[name] = { total: 0, avgPerMonth: 0 }
@@ -399,8 +466,8 @@ export default function App() {
     for (const session of sessions) {
       const participants = new Set()
       ;(session.entries || []).forEach((entry) => {
-        if (entry.payer) participants.add(entry.payer)
-        ;(entry.people || []).forEach((p) => participants.add(p))
+        if (entry.payer) participants.add(getNameById(entry.payer) || entry.payer)
+        ;(entry.people || []).forEach((p) => participants.add(getNameById(p) || p))
       })
 
       for (const name of Object.keys(stats)) {
@@ -449,6 +516,7 @@ export default function App() {
                 onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
                 onDeleteSession={handleDeleteSession}
                 onNewSession={handleNewSession}
+                onSyncPlayers={() => ensurePlayersForNames(getSessionPeople(sessions))}
               />
             )}
             {sidebarView.view === 'match-history' && (
@@ -461,6 +529,7 @@ export default function App() {
               <SessionDetailPage
                 session={viewingSession}
                 expenseTypes={expenseTypes}
+                players={players}
                 onBack={() => { setViewingSession(null); setSidebarView({ view: 'sessions', session: null }) }}
                 onUpdateSession={handleUpdateSession}
                 onEditSession={handleEditSession}
@@ -468,15 +537,15 @@ export default function App() {
             )}
             {sidebarView.view === 'players' && (
               <PlayersPage
-                playerNames={playerNames}
-                playerStats={playerStats}
+                  players={players}
+                  playerStats={playerStats}
                 onAddClick={() => {
                   setPlayerInputValue('')
                   setIsAddPlayerModalOpen(true)
                 }}
                 onEditClick={(p) => {
-                  setEditPlayerOldName(p)
-                  setEditPlayerNewName(p)
+                  setEditPlayerId(p.id)
+                  setEditPlayerNewName(p.name)
                   setIsEditPlayerModalOpen(true)
                 }}
                 onDeleteClick={handleDeletePlayer}
@@ -503,6 +572,7 @@ export default function App() {
               <StatsPage
                 sessions={sessions}
                 expenseTypes={expenseTypes}
+                players={players}
               />
             )}
             {!['sessions', 'match-history', 'session', 'players', 'types', 'stats'].includes(sidebarView.view) && (
@@ -692,7 +762,7 @@ export default function App() {
             <div style={{ overflow: 'auto', flex: 1 }}>
               <SessionForm
                 session={currentSession}
-                names={playerNames}
+                players={players}
                 expenseTypes={expenseTypes}
                 onAddPlayerName={handleAddPlayerName}
                 onAddExpenseType={handleAddExpenseType}

@@ -58,9 +58,10 @@ export async function importSessions(sessions) {
 }
 
 /** Bulk upsert danh sách tên người chơi */
-export async function upsertPlayers(names) {
-  if (!names.length) return
-  return api('POST', '/players/bulk', names)
+export async function upsertPlayers(items) {
+  if (!items || !items.length) return
+  // items can be array of names or array of { id?, name }
+  return api('POST', '/players/bulk', items)
 }
 
 /** Bulk upsert danh sách loại chi phí */
@@ -70,13 +71,13 @@ export async function upsertExpenseTypes(types) {
 }
 
 /** Cập nhật tên người chơi */
-export async function updatePlayer(oldName, newName) {
-  return api('PUT', `/players/${encodeURIComponent(oldName)}`, { name: newName })
+export async function updatePlayer(id, newName) {
+  return api('PUT', `/players/${encodeURIComponent(id)}`, { name: newName })
 }
 
 /** Xoá một người chơi */
-export async function removePlayer(name) {
-  return api('DELETE', `/players/${encodeURIComponent(name)}`)
+export async function removePlayer(id) {
+  return api('DELETE', `/players/${encodeURIComponent(id)}`)
 }
 
 /** Cập nhật một loại chi phí */

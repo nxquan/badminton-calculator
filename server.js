@@ -27,8 +27,61 @@ console.log('✅ Kết nối MongoDB thành công')
 app.get('/api/sessions', async (req, res) => {
   try {
     const docs = await sessions.find({}).sort({ createdAt: -1 }).toArray()
-    // Loại bỏ _id của MongoDB
-    res.json(docs.map(({ _id, ...rest }) => rest))
+
+    // Load players map: id (string) -> name
+    const playerDocs = await players.find({}).toArray()
+    const idToName = new Map()
+    const nameToId = new Map()
+    for (const p of playerDocs) {
+      const key = String(p._id)
+      const name = p.name || key
+      idToName.set(key, name)
+      if (name) nameToId.set(name, key)
+    }
+
+    const normalized = docs.map((doc) => {
+      const { _id, ...rest } = doc
+      const entries = (rest.entries || []).map((entry) => {
+        const e = { ...entry }
+
+        // normalize payer: provide both id string, name, and object
+        if (e.payer != null) {
+          const payerKey = String(e.payer)
+          let mappedId = null
+          let mappedName = null
+          if (idToName.has(payerKey)) {
+            mappedId = payerKey
+            mappedName = idToName.get(payerKey)
+          } else if (nameToId.has(payerKey)) {
+            mappedId = nameToId.get(payerKey)
+            mappedName = payerKey
+          } else {
+            mappedId = payerKey
+            mappedName = payerKey
+          }
+
+          e.payer = { id: mappedId, name: mappedName }
+          e.payerId = mappedId
+          e.payerName = mappedName
+        }
+
+        // normalize people: return array of { id, name } and also peopleNames for compatibility
+        if (Array.isArray(e.people)) {
+          const ids = e.people.map((p) => String(p))
+          e.people = ids.map((pid) => ({ id: pid, name: idToName.get(pid) || pid }))
+          e.peopleNames = e.people.map((p) => p.name)
+        } else {
+          e.people = []
+          e.peopleNames = []
+        }
+
+        return e
+      })
+
+      return { ...rest, entries }
+    })
+
+    res.json(normalized)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -46,10 +99,12 @@ app.post('/api/sessions', async (req, res) => {
 })
 
 // Lấy danh sách tên người chơi
+// Players now stored as documents { _id: <id>, name: <string> }
 app.get('/api/players', async (req, res) => {
   try {
-    const docs = await players.find({}).sort({ _id: 1 }).toArray()
-    res.json(docs.map((doc) => doc._id))
+    const docs = await players.find({}).sort({ name: 1 }).toArray()
+    // return normalized format: [{ id, name }]
+    res.json(docs.map((doc) => ({ id: doc._id, name: doc.name || String(doc._id) })))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -58,22 +113,49 @@ app.get('/api/players', async (req, res) => {
 // Bulk upsert danh sách tên người chơi (key chính là tên)
 app.post('/api/players/bulk', async (req, res) => {
   try {
-    const names = [...new Set((req.body || []).map((name) => String(name || '').trim()).filter(Boolean))]
-    if (names.length === 0) {
-      return res.json({ ok: true, inserted: 0 })
+    // Accept either array of strings (names) or array of objects { id?, name }
+    const items = Array.isArray(req.body) ? req.body : []
+    const normalized = []
+    for (const it of items) {
+      if (!it) continue
+      if (typeof it === 'string') {
+        const name = String(it).trim()
+        if (name) normalized.push({ name })
+      } else if (typeof it === 'object') {
+        const name = String(it.name || '').trim()
+        if (name) normalized.push({ id: it.id, name })
+      }
     }
 
-    await players.bulkWrite(
-      names.map((name) => ({
-        updateOne: {
-          filter: { _id: name },
-          update: { $setOnInsert: { _id: name, name } },
-          upsert: true,
-        },
-      }))
-    )
+    const byName = [...new Map(normalized.map((p) => [p.name, p])).values()]
+    if (byName.length === 0) return res.json({ ok: true, upserted: 0 })
 
-    res.json({ ok: true, upserted: names.length })
+    // Upsert by name to preserve one document per name. If an id is provided and
+    // document doesn't exist, use provided id as _id; otherwise generate one.
+    const ops = []
+    for (const p of byName) {
+      const idValue = p.id && String(p.id).trim() ? p.id : undefined
+      if (idValue) {
+        ops.push({
+          updateOne: {
+            filter: { name: p.name },
+            update: { $setOnInsert: { _id: idValue, name: p.name } },
+            upsert: true,
+          },
+        })
+      } else {
+        ops.push({
+          updateOne: {
+            filter: { name: p.name },
+            update: { $setOnInsert: { name: p.name } },
+            upsert: true,
+          },
+        })
+      }
+    }
+
+    if (ops.length) await players.bulkWrite(ops)
+    res.json({ ok: true, upserted: byName.length })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -168,11 +250,12 @@ app.post('/api/sessions/bulk', async (req, res) => {
 })
 
 // Cập nhật tên người chơi
-app.put('/api/players/:name', async (req, res) => {
+// Update player by id
+app.put('/api/players/:id', async (req, res) => {
   try {
-    const oldName = req.params.name
+    const id = req.params.id
     const { name: newName } = req.body
-    
+
     if (!newName || typeof newName !== 'string') {
       return res.status(400).json({ error: 'Tên mới không hợp lệ' })
     }
@@ -182,14 +265,14 @@ app.put('/api/players/:name', async (req, res) => {
       return res.status(400).json({ error: 'Tên không được để trống' })
     }
 
-    // Nếu tên cũ và tên mới giống nhau, không cần update
-    if (oldName === newNameTrimmed) {
-      return res.json({ ok: true })
-    }
+    const result = await players.updateOne(
+      { _id: id },
+      { $set: { name: newNameTrimmed } }
+    )
 
-    // Rename: delete old, insert new
-    await players.deleteOne({ _id: oldName })
-    await players.insertOne({ _id: newNameTrimmed, name: newNameTrimmed })
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Người chơi không tồn tại' })
+    }
 
     res.json({ ok: true })
   } catch (err) {
@@ -198,10 +281,24 @@ app.put('/api/players/:name', async (req, res) => {
 })
 
 // Xoá một người chơi
-app.delete('/api/players/:name', async (req, res) => {
+app.delete('/api/players/:id', async (req, res) => {
   try {
-    const name = req.params.name
-    const result = await players.deleteOne({ _id: name })
+    const id = req.params.id
+    // Prevent deletion if player is referenced in any session (as payer or in people)
+    const inUse = await sessions.findOne({
+      $or: [
+        { 'entries.payer': id },
+        { 'entries.payer.id': id },
+        { 'entries.people': id },
+        { 'entries.people.id': id },
+      ],
+    })
+
+    if (inUse) {
+      return res.status(409).json({ error: 'player_in_sessions', message: 'Không thể xóa: người chơi đã tham gia session' })
+    }
+
+    const result = await players.deleteOne({ _id: id })
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Người chơi không tồn tại' })

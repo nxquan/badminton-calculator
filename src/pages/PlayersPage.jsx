@@ -1,5 +1,5 @@
 export default function PlayersPage({ 
-  playerNames, 
+  players = [],
   onAddClick, 
   onEditClick, 
   onDeleteClick,
@@ -20,19 +20,19 @@ export default function PlayersPage({
       </div>
       <div style={{ padding: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {playerNames.length === 0 ? (
+          {players.length === 0 ? (
             <p style={{ color: 'var(--text-secondary)' }}>Chưa có người chơi nào.</p>
           ) : (
-            playerNames.map((p) => (
-              <div key={p} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 8, background: '#F7F9FC', borderRadius: 6 }}>
-                <div style={{ width: 100 }}>{p}</div>
-                <div style={{ width: 140, textAlign: 'right', color: 'var(--text-secondary)' }}>{playerStats?.[p]?.total || 0}</div>
-                <div style={{ width: 140, textAlign: 'right', color: 'var(--text-secondary)' }}>{playerStats?.[p]?.avgPerMonth ?? 0}</div>
+            players.map((p) => (
+              <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 8, background: '#F7F9FC', borderRadius: 6 }}>
+                <div style={{ width: 100 }}>{p.name}</div>
+                <div style={{ width: 140, textAlign: 'right', color: 'var(--text-secondary)' }}>{playerStats?.[p.name]?.total || 0}</div>
+                <div style={{ width: 140, textAlign: 'right', color: 'var(--text-secondary)' }}>{playerStats?.[p.name]?.avgPerMonth ?? 0}</div>
                 <div style={{ width: 140, textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600 }}>{`0/0`}</div>
                 <div style={{ flex: 1, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <button className="btn btn-outline btn-sm" onClick={() => onEditClick(p)}>✎</button>
                   <button className="btn btn-danger-soft btn-sm" onClick={() => {
-                    if (confirm(`Xóa người chơi "${p}"?`)) onDeleteClick(p)
+                    if (confirm(`Xóa người chơi "${p.name}"?`)) onDeleteClick(p)
                   }}>✕</button>
                 </div>
               </div>

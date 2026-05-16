@@ -1,8 +1,42 @@
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
 
-export default function SessionResult({ session, expenseTypes, onBack, onUpdateSession, onEditSession }) {
-  const totals = calculateTotals(session.entries)
+export default function SessionResult({ session, expenseTypes, onBack, onUpdateSession, onEditSession, players = [] }) {
+  const idToName = Object.fromEntries((players || []).map((p) => [p.id, p.name]))
+
+  const getId = (p) => {
+    if (!p && p !== 0) return ''
+    return typeof p === 'object' ? String(p.id) : String(p)
+  }
+
+  const getName = (p) => {
+    if (!p && p !== 0) return ''
+    if (typeof p === 'object') return p.name || String(p.id)
+    return idToName[String(p)] || String(p)
+  }
+
+  // Normalize entries for UI: use names for calculations/display, include `{id,name}` objects, and prepare form entries with ids
+  const normalizedEntries = (session.entries || []).map((e) => {
+    const peopleObjs = (e.people || []).map((p) => (typeof p === 'object' ? { id: getId(p), name: getName(p) } : { id: getId(p), name: getName(p) }))
+    const peopleNames = peopleObjs.map((p) => p.name)
+    const peopleIds = peopleObjs.map((p) => p.id)
+    const payerObj = typeof e.payer === 'object' ? e.payer : { id: getId(e.payer), name: getName(e.payer) }
+    return {
+      ...e,
+      // for calculations and display we use names
+      payer: payerObj.name,
+      payerObj,
+      people: peopleNames,
+      peopleObjs,
+      // keep ids handy for editing
+      _peopleIds: peopleIds,
+      _payerId: payerObj.id,
+    }
+  })
+
+  const totalsRaw = calculateTotals(normalizedEntries)
+  // map totals keys (ids or names) to names
+  const totals = Object.fromEntries(Object.entries(totalsRaw).map(([k, v]) => [(getName(k) || k), v]))
   const grandTotal = Object.values(totals).reduce((sum, value) => sum + value, 0)
   const participants = sortPlayerNames(Object.keys(totals))
   const [activeResultTab, setActiveResultTab] = useState('entries')
@@ -89,18 +123,35 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
       return m
     }, {})
 
-    return [...(session.entries || [])].sort((a, b) => {
+    return [...normalizedEntries].sort((a, b) => {
       const ia = orderMap[a.type] ?? 9999
       const ib = orderMap[b.type] ?? 9999
       if (ia !== ib) return ia - ib
       return String(getEntryLabel(a, expenseTypes)).localeCompare(String(getEntryLabel(b, expenseTypes)), 'vi', { sensitivity: 'base' })
     })
-  }, [session.entries, expenseTypes])
+  }, [normalizedEntries, expenseTypes])
 
-  const playerColumns = useMemo(
-    () => sortPlayerNames([...new Set((session.entries || []).flatMap((entry) => entry.people || []))]),
-    [session.entries]
-  )
+  const playerColumns = useMemo(() => {
+    const names = new Set()
+    for (const entry of normalizedEntries) {
+      for (const pName of (entry.people || [])) {
+        names.add(pName)
+      }
+    }
+    return sortPlayerNames([...names])
+  }, [normalizedEntries, players])
+
+  const nameToIdMap = Object.fromEntries((players || []).map((p) => [p.name, p.id]))
+  const findIdByName = (name) => {
+    if (nameToIdMap[name]) return nameToIdMap[name]
+    for (const e of normalizedEntries) {
+      for (const p of (e.peopleObjs || [])) {
+        if ((p.name || p.id) === name) return p.id
+      }
+      if ((e.payerObj?.name || e.payerObj?.id) === name) return e.payerObj.id
+    }
+    return null
+  }
 
   const groupedEntries = useMemo(() => {
     const groups = {}
@@ -117,16 +168,17 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   // Calculate breakdown by expense type for each person
   const expenseTypeBreakdown = useMemo(() => {
     const breakdown = {}
-    for (const entry of session.entries || []) {
+    for (const entry of normalizedEntries) {
       if (!breakdown[entry.type]) breakdown[entry.type] = {}
-      const perPerson = entry.amount / entry.people.length
-      for (const person of entry.people) {
-        if (!breakdown[entry.type][person]) breakdown[entry.type][person] = 0
-        breakdown[entry.type][person] += perPerson
+      const perPerson = entry.amount / (entry.people.length || 1)
+      for (const personName of entry.people) {
+        const name = personName || ''
+        if (!breakdown[entry.type][name]) breakdown[entry.type][name] = 0
+        breakdown[entry.type][name] += perPerson
       }
     }
     return breakdown
-  }, [session.entries])
+  }, [normalizedEntries, players])
 
   // Get all unique expense types sorted
   const allExpenseTypes = useMemo(() => {
@@ -145,7 +197,18 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
           ← Quay lại
         </button>
         {canEditSession && (
-          <button className="btn btn-primary" style={{ marginLeft: 20 }} onClick={() => onEditSession?.(session)}>
+          <button
+            className="btn btn-primary"
+            style={{ marginLeft: 20 }}
+            onClick={() => {
+              const formEntries = normalizedEntries.map((e) => ({
+                ...e,
+                payer: e._payerId || getId(e.payerObj || e.payer),
+                people: e._peopleIds || (e.peopleObjs || []).map((p) => p.id),
+              }))
+              onEditSession?.({ ...session, entries: formEntries })
+            }}
+          >
             ✎ Chỉnh sửa phiên
           </button>
         )}
@@ -203,7 +266,6 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                         const isFirstInGroup = itemIndex === 0
                         const bgColor = groupIndex % 2 === 0 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.5)'
                         const borderTop = isFirstInGroup ? '1px solid rgba(59, 130, 246, 1)' : 'none'
-
                         return (
                           <tr key={entry.id} style={{ backgroundColor: bgColor, borderTop }}>
                             <td>
@@ -212,7 +274,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                               </span>
                             </td>
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              {entry.payer || 'Trí'}
+                              {entry?.payerObj?.name || entry?.payer || ''}
                             </td>
                             <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
                               {formatMoney(entry.amount * 1000)}
@@ -226,26 +288,29 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                                   width: '100%',
                                 }}
                               >
-                                {playerColumns.map((name) => (
-                                  <span
-                                    key={name}
-                                    style={{
-                                      backgroundColor: entry.people.includes(name) ? 'rgba(73, 101, 243, 0.2)' : 'transparent',
-                                      padding: '2px',
-                                      borderRadius: '3px',
-                                      fontWeight: 500,
-                                      fontSize: '0.7rem',
-                                      whiteSpace: 'nowrap',
-                                      textAlign: 'center',
-                                      minHeight: '18px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                    }}
-                                  >
-                                    {entry.people.includes(name) ? name : ''}
-                                  </span>
-                                ))}
+                                {playerColumns.map((name) => {
+                                  const active = (entry.people || []).includes(name)
+                                  return (
+                                    <span
+                                      key={name}
+                                      style={{
+                                        backgroundColor: active ? 'rgba(73, 101, 243, 0.2)' : 'transparent',
+                                        padding: '2px',
+                                        borderRadius: '3px',
+                                        fontWeight: 500,
+                                        fontSize: '0.7rem',
+                                        whiteSpace: 'nowrap',
+                                        textAlign: 'center',
+                                        minHeight: '18px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      {active ? name : ''}
+                                    </span>
+                                  )
+                                })}
                               </div>
                             </td>
                             <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
@@ -318,8 +383,8 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               {Object.entries(totals)
                 .sort((a, b) => b[1] - a[1])
                 .map(([name, amount]) => {
-                  const paid = session.entries
-                    .filter((entry) => (entry.payer || 'Trí') === name)
+                  const paid = normalizedEntries
+                    .filter((entry) => entry.payer === name)
                     .reduce((sum, entry) => sum + entry.amount, 0)
                   const owe = amount - paid
                   const isSettled = settledPlayers.includes(name)
