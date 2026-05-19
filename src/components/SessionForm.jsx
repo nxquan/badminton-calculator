@@ -117,6 +117,8 @@ function ExpenseTypePicker({ value, expenseTypes = [], onSelect }) {
     [sortedTypes, value]
   )
 
+  const inputRef = useRef(null)
+
   useEffect(() => {
     setQuery(selectedType ? selectedType.label : '')
   }, [selectedType])
@@ -179,6 +181,7 @@ function ExpenseTypePicker({ value, expenseTypes = [], onSelect }) {
           </span>
         )}
       <input
+        ref={inputRef}
         type="text"
         value={query}
         placeholder="Nhập tên chi phí..."
@@ -189,8 +192,36 @@ function ExpenseTypePicker({ value, expenseTypes = [], onSelect }) {
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
-        style={{ paddingLeft: selectedType ? '38px' : undefined }}
+        style={{ paddingLeft: selectedType ? '38px' : undefined, paddingRight: '34px' }}
       />
+        {selectedType && (
+          <button
+            type="button"
+            aria-label="Clear expense"
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelect('')
+              setQuery('')
+              setHighlightedIndex(0)
+              setOpen(true)
+              inputRef.current?.focus()
+            }}
+            style={{
+              position: 'absolute',
+              right: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 14,
+              zIndex: 3,
+              padding: '2px 6px'
+            }}
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {open && filteredTypes.length > 0 && (
@@ -255,6 +286,8 @@ function PayerPicker({ value, players = [], onSelect }) {
     [sortedPlayers, value]
   )
 
+  const inputRef = useRef(null)
+
   useEffect(() => {
     setQuery(selectedPlayer ? selectedPlayer.name : '')
   }, [selectedPlayer])
@@ -301,6 +334,7 @@ function PayerPicker({ value, players = [], onSelect }) {
   return (
     <div style={{ position: 'relative' }}>
       <input
+        ref={inputRef}
         type="text"
         value={query}
         placeholder="Chọn người trả..."
@@ -311,7 +345,37 @@ function PayerPicker({ value, players = [], onSelect }) {
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
+        style={{ paddingRight: '34px' }}
       />
+
+      {selectedPlayer && (
+        <button
+          type="button"
+          aria-label="Clear payer"
+          onClick={(e) => {
+            e.stopPropagation()
+            onSelect('')
+            setQuery('')
+            setHighlightedIndex(0)
+            setOpen(true)
+            inputRef.current?.focus()
+          }}
+          style={{
+            position: 'absolute',
+            right: 8,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            zIndex: 3,
+            padding: '2px 6px'
+          }}
+        >
+          ×
+        </button>
+      )}
 
       {open && filteredPlayers.length > 0 && (
         <div
