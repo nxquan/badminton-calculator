@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { toast } from 'react-toastify'
 import * as mongoApi from '../services/mongoApi'
 import { loadCombos, saveCombos } from '../constants'
 
@@ -63,19 +64,23 @@ export default function ComboConfigPage({ label, combos = [], players = [], onSa
       if (onSave) {
         await onSave(updated)
       } else if (mongoApi.isConfigured) {
-        await mongoApi.updateCombo(updated.label, updated)
+        await toast.promise(mongoApi.updateCombo(updated.label, updated), {
+          pending: 'Đang lưu combo...',
+          success: 'Đã lưu combo',
+          error: 'Không thể lưu combo',
+        })
       } else {
         // update localStorage fallback
         const list = loadCombos().map((c) => (c.label === updated.label ? updated : c))
         saveCombos(list)
+        toast.success('Đã lưu combo')
       }
       setCombo(updated)
       // update original snapshot so Save becomes disabled until further changes
       originalRef.current = updated
-      alert('Đã lưu')
     } catch (e) {
       console.error(e)
-      alert('Lỗi khi lưu combo')
+      if (!onSave && !mongoApi.isConfigured) toast.error('Lỗi khi lưu combo')
     } finally {
       setSaving(false)
     }

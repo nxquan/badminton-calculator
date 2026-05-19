@@ -460,6 +460,29 @@ select:focus {
   text-align: right;
 }
 
+.stats-monthly-header,
+.stats-monthly-cell {
+  background: #fff7ed;
+}
+
+.stats-monthly-header {
+  color: var(--color-accent-dark);
+  border-left: 2px solid rgba(255, 147, 46, 0.35);
+  border-right: 2px solid rgba(255, 147, 46, 0.35);
+}
+
+.stats-monthly-cell {
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  border-left: 2px solid rgba(255, 147, 46, 0.18);
+  border-right: 2px solid rgba(255, 147, 46, 0.18);
+}
+
+.stats-monthly-total {
+  background: #ffedd5;
+  border-top: 2px solid rgba(255, 147, 46, 0.35);
+}
+
 .result-table tr:last-child td {
   border-bottom: none;
 }

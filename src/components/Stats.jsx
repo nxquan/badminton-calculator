@@ -47,6 +47,7 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
   const [filterType, setFilterType] = useState('month')
   const [filterValue, setFilterValue] = useState('')
   const isMonthlyView = filterType === 'month'
+  const isAllView = filterType === 'all'
 
   const monthOptions = useMemo(() => getMonthOptions(sessions), [sessions])
 
@@ -139,6 +140,18 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
 
   const sessionCount = filteredSessions.length
 
+  const activeMonthCount = useMemo(() => {
+    if (!isAllView) return 0
+    const months = new Set(
+      sessions
+        .map((s) => s.date?.slice(0, 7))
+        .filter(Boolean)
+    )
+    return months.size
+  }, [isAllView, sessions])
+
+  const overallMonthlyAverage = activeMonthCount > 0 ? sumTotal / activeMonthCount : 0
+
   return (
     <div>
       <div className="card">
@@ -212,11 +225,13 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                     </th>
                   ))}
                   <th>Tổng</th>
+                  {isAllView && <th className="stats-monthly-header">Chi tiêu / tháng</th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, i) => {
                   const rankInfo = isMonthlyView ? getMonthlyRank(i) : null
+                  const monthlyAverage = activeMonthCount > 0 ? row.total / activeMonthCount : 0
                   return (
                     <tr key={row.name}>
                       <td style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{i + 1}</td>
@@ -239,6 +254,11 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                       <td className={`stats-total-cell ${rankInfo ? `stats-total-${rankInfo.className}` : ''}`}>
                         {formatMoney(Math.round(row.total * 1000))}
                       </td>
+                      {isAllView && (
+                        <td className="stats-monthly-cell">
+                          {activeMonthCount > 0 ? formatMoney(Math.round(monthlyAverage * 1000)) : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -250,6 +270,11 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                     </td>
                   ))}
                   <td>{formatMoney(Math.round(sumTotal * 1000))}</td>
+                  {isAllView && (
+                    <td className="stats-monthly-cell stats-monthly-total">
+                      {activeMonthCount > 0 ? formatMoney(Math.round(overallMonthlyAverage * 1000)) : '—'}
+                    </td>
+                  )}
                 </tr>
               </tbody>
             </table>

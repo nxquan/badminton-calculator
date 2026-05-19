@@ -133,10 +133,45 @@ app.get('/api/sessions', async (req, res) => {
 
 // Thêm 1 session
 app.post('/api/sessions', async (req, res) => {
-  // Creating sessions via this endpoint is disabled to prevent automatic
-  // insertion/upsert of session documents. Use the session creation workflow
-  // approved by the application or create sessions directly in the database.
-  res.status(403).json({ error: 'creating_sessions_disabled', message: 'Creating sessions via this API is disabled.' })
+  try {
+    const playerDocs = await players.find({}).toArray()
+    const nameToId = new Map(playerDocs.map((p) => [String(p.name || '').trim(), String(p._id)]))
+
+    const resolveId = (value) => {
+      if (!value && value !== 0) return ''
+      if (typeof value === 'object') {
+        const rawId = value.id != null ? String(value.id).trim() : ''
+        if (rawId) return rawId
+        const rawName = String(value.name || '').trim()
+        return nameToId.get(rawName) || rawName
+      }
+      const raw = String(value).trim()
+      return nameToId.get(raw) || raw
+    }
+
+    const doc = {
+      ...req.body,
+      createdAt: req.body.createdAt || new Date().toISOString(),
+      entries: (req.body.entries || []).map((entry) => ({
+        ...entry,
+        payer: resolveId(entry.payer),
+        people: Array.isArray(entry.people) ? entry.people.map(resolveId).filter(Boolean) : [],
+      })),
+    }
+    if (!doc.id) {
+      return res.status(400).json({ error: 'Session id is required' })
+    }
+
+    const result = await sessions.updateOne(
+      { id: doc.id },
+      { $setOnInsert: doc },
+      { upsert: true }
+    )
+
+    res.json({ ok: true, upserted: result.upsertedCount || 0, existed: result.matchedCount > 0 })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // Lấy danh sách tên người chơi

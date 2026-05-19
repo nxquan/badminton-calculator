@@ -1,8 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { ToastContainer, toast } from 'react-toastify'
 import SessionForm from './components/SessionForm'
 import Sidebar from './components/Sidebar'
 import * as mongoApi from './services/mongoApi'
 import { DEFAULT_EXPENSE_TYPES, getSessionPeople, sortExpenseTypes, sortPlayerNames, loadCombos } from './constants'
+import 'react-toastify/dist/ReactToastify.css'
 // Page imports
 import SessionsPage from './pages/SessionsPage'
 import MatchHistoryPage from './pages/MatchHistoryPage'
@@ -87,6 +89,27 @@ export default function App() {
   const [isEditingSessionInModal, setIsEditingSessionInModal] = useState(false)
   const dbInitializedRef = useRef(false)
 
+  const getErrorMessage = useCallback((err, fallback) => {
+    const message = String(err?.message || err?.error || err || '').trim()
+    return message || fallback
+  }, [])
+
+  const runToastMutation = useCallback((promise, messages) => {
+    if (!mongoApi.isConfigured) return promise
+    return toast.promise(promise, {
+      pending: messages.pending,
+      success: messages.success,
+      error: {
+        render({ data }) {
+          if (typeof messages.error === 'function') return messages.error(data)
+          if (messages.error) return messages.error
+          const raw = data?.message || data?.error || data
+          return raw ? String(raw) : 'Có lỗi xảy ra'
+        },
+      },
+    })
+  }, [])
+
   const getNameById = useCallback((id) => {
     const p = players.find((pp) => pp.id === id)
     return p ? p.name : id
@@ -138,14 +161,21 @@ export default function App() {
     setPlayers((prev) => [...prev, ...toCreate])
     if (mongoApi.isConfigured) {
       try {
-        await mongoApi.upsertPlayers(toCreate)
+        await runToastMutation(
+          mongoApi.upsertPlayers(toCreate),
+          {
+            pending: 'Đang tạo người chơi...',
+            success: `Đã tạo ${toCreate.length} người chơi`,
+            error: 'Không thể tạo người chơi',
+          }
+        )
         const fresh = await mongoApi.getAllPlayers()
         setPlayers(Array.isArray(fresh) ? fresh : [])
       } catch (e) {
         console.error(e)
       }
     }
-  }, [players])
+  }, [players, runToastMutation])
 
   const extractNamesFromSession = useCallback((session) => {
     // returns array of names (resolve ids to names if needed)
@@ -168,9 +198,16 @@ export default function App() {
     const nextTypes = sortExpenseTypes(types)
     setExpenseTypes((prev) => sortExpenseTypes([...prev, ...nextTypes]))
     if (mongoApi.isConfigured) {
-      mongoApi.upsertExpenseTypes(nextTypes).catch(console.error)
+      void runToastMutation(
+        mongoApi.upsertExpenseTypes(nextTypes),
+        {
+          pending: 'Đang lưu loại kinh phí...',
+          success: 'Đã lưu loại kinh phí',
+          error: 'Không thể lưu loại kinh phí',
+        }
+      )
     }
-  }, [])
+  }, [runToastMutation])
 
   const handleAddExpenseType = useCallback((type) => {
     persistExpenseTypes([type])
@@ -183,6 +220,11 @@ export default function App() {
     setDbStatus('loading')
     Promise.allSettled([mongoApi.getAllSessions(), mongoApi.getAllPlayers(), mongoApi.getAllExpenseTypes(), mongoApi.getAllCombos()])
       .then(async ([sessionsResult, playersResult, typesResult, combosResult]) => {
+        if (sessionsResult.status === 'rejected') toast.error(getErrorMessage(sessionsResult.reason, 'Không thể tải danh sách phiên'))
+        if (playersResult.status === 'rejected') toast.error(getErrorMessage(playersResult.reason, 'Không thể tải danh sách người chơi'))
+        if (typesResult.status === 'rejected') toast.error(getErrorMessage(typesResult.reason, 'Không thể tải danh sách loại kinh phí'))
+        if (combosResult.status === 'rejected') toast.error(getErrorMessage(combosResult.reason, 'Không thể tải danh sách combo'))
+
         const localSessions = loadSessions()
         const docs = sessionsResult.status === 'fulfilled' ? sessionsResult.value : []
         const fetchedPlayersRaw = playersResult.status === 'fulfilled' ? playersResult.value : []
@@ -200,7 +242,14 @@ export default function App() {
         const resolvedSessions = resolvedSessionsRaw.map((s) => normalizeSessionForStorage(s, resolvedPlayers))
 
         if (sessionsResult.status === 'fulfilled' && docs.length === 0 && localSessions.length > 0) {
-          mongoApi.importSessions(localSessions).catch(console.error)
+          void runToastMutation(
+            mongoApi.importSessions(localSessions),
+            {
+              pending: 'Đang đồng bộ các phiên cũ...',
+              success: `Đã đồng bộ ${localSessions.length} phiên`,
+              error: 'Không thể đồng bộ phiên cũ',
+            }
+          )
         }
 
         setSessions(resolvedSessions)
@@ -211,7 +260,14 @@ export default function App() {
         if (resolvedPlayers.length === 0 && derived.length > 0) {
           const toCreate = [...new Set(derived)].map((n) => ({ id: crypto.randomUUID(), name: n }))
           try {
-            await mongoApi.upsertPlayers(toCreate)
+            await runToastMutation(
+              mongoApi.upsertPlayers(toCreate),
+              {
+                pending: 'Đang đồng bộ người chơi...',
+                success: `Đã đồng bộ ${toCreate.length} người chơi`,
+                error: 'Không thể đồng bộ người chơi',
+              }
+            )
             setPlayers((prev) => [...prev, ...toCreate])
           } catch (err) {
             console.error(err)
@@ -234,7 +290,14 @@ export default function App() {
         }
 
         if (types.length === 0) {
-          mongoApi.upsertExpenseTypes(DEFAULT_EXPENSE_TYPES).catch(console.error)
+          void runToastMutation(
+            mongoApi.upsertExpenseTypes(DEFAULT_EXPENSE_TYPES),
+            {
+              pending: 'Đang đồng bộ loại kinh phí...',
+              success: 'Đã đồng bộ loại kinh phí mặc định',
+              error: 'Không thể đồng bộ loại kinh phí',
+            }
+          )
         }
 
         if (sessionsResult.status === 'rejected' && playersResult.status === 'rejected' && typesResult.status === 'rejected') {
@@ -245,9 +308,10 @@ export default function App() {
       })
       .catch((err) => {
         console.error('MongoDB load error:', err)
+        toast.error(getErrorMessage(err, 'Không thể tải dữ liệu từ server'))
         setDbStatus('error')
       })
-  }, [normalizeSessionForStorage])
+  }, [getErrorMessage, normalizeSessionForStorage])
 
   const handleSaveSession = useCallback((session) => {
     const normalizedSession = normalizeSessionForStorage(session, players)
@@ -264,13 +328,16 @@ export default function App() {
     setIsAddSessionModalOpen(false)
     setViewingSession(normalizedSession)
     if (mongoApi.isConfigured) {
-      if (isExisting) {
-        mongoApi.updateSession(normalizedSession).catch(console.error)
-      } else {
-        mongoApi.insertSession(normalizedSession).catch(console.error)
-      }
+      void runToastMutation(
+        isExisting ? mongoApi.updateSession(normalizedSession) : mongoApi.insertSession(normalizedSession),
+        {
+          pending: isExisting ? 'Đang cập nhật phiên...' : 'Đang tạo phiên...',
+          success: isExisting ? 'Đã cập nhật phiên' : 'Đã tạo phiên',
+          error: isExisting ? 'Không thể cập nhật phiên' : 'Không thể tạo phiên',
+        }
+      )
     }
-  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, sessions, players])
+  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, sessions, players, runToastMutation])
 
   const handleDeleteSession = useCallback((id) => {
     setSessions((prev) => {
@@ -282,9 +349,16 @@ export default function App() {
       setViewingSession(null)
     }
     if (mongoApi.isConfigured) {
-      mongoApi.removeSession(id).catch(console.error)
+      void runToastMutation(
+        mongoApi.removeSession(id),
+        {
+          pending: 'Đang xóa phiên...',
+          success: 'Đã xóa phiên',
+          error: 'Không thể xóa phiên',
+        }
+      )
     }
-  }, [viewingSession])
+  }, [viewingSession, runToastMutation])
 
   const handleUpdateSession = useCallback((updatedSession) => {
     const normalizedSession = normalizeSessionForStorage(updatedSession, players)
@@ -298,9 +372,16 @@ export default function App() {
     setViewingSession((prev) => (prev?.id === normalizedSession.id ? normalizedSession : prev))
 
     if (mongoApi.isConfigured) {
-      mongoApi.updateSession(normalizedSession).catch(console.error)
+      void runToastMutation(
+        mongoApi.updateSession(normalizedSession),
+        {
+          pending: 'Đang cập nhật phiên...',
+          success: 'Đã cập nhật phiên',
+          error: 'Không thể cập nhật phiên',
+        }
+      )
     }
-  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, players])
+  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, players, runToastMutation])
 
   const handleNewSession = useCallback(() => {
     setNewSessionDate(new Date().toISOString().split('T')[0])
@@ -370,7 +451,10 @@ export default function App() {
     reader.onload = (ev) => {
       try {
         const imported = JSON.parse(ev.target.result)
-        if (!Array.isArray(imported)) return alert('File không hợp lệ')
+        if (!Array.isArray(imported)) {
+          toast.error('File không hợp lệ')
+          return
+        }
         const existingIds = new Set(sessions.map((s) => s.id))
         const normalizedImported = imported.map((s) => normalizeSessionForStorage(s))
         const newOnes = normalizedImported.filter((s) => !existingIds.has(s.id))
@@ -379,18 +463,25 @@ export default function App() {
           const merged = [...newOnes, ...prev]
           saveSessions(merged)
           if (mongoApi.isConfigured && newOnes.length) {
-            mongoApi.importSessions(newOnes).catch(console.error)
+            void runToastMutation(
+              mongoApi.importSessions(newOnes),
+              {
+                pending: 'Đang nhập các phiên...',
+                success: `Đã nhập ${newOnes.length} phiên`,
+                error: 'Không thể nhập phiên',
+              }
+            )
           }
           return merged
         })
-        alert(`Đã import ${imported.length} phiên`)
+        toast.success(`Đã import ${imported.length} phiên`)
       } catch {
-        alert('Không đọc được file JSON')
+        toast.error('Không đọc được file JSON')
       }
     }
     reader.readAsText(file)
     e.target.value = ''
-  }, [normalizeSessionForStorage])
+  }, [normalizeSessionForStorage, ensurePlayersForNames, runToastMutation, sessions])
 
   const handleEditPlayer = useCallback((player, newName) => {
     // player: object { id, name } passed from PlayersPage
@@ -401,9 +492,16 @@ export default function App() {
 
     // No need to update sessions (they reference ids). Only persist player name change.
     if (mongoApi.isConfigured) {
-      mongoApi.updatePlayer(id, newNameTrim).catch(console.error)
+      void runToastMutation(
+        mongoApi.updatePlayer(id, newNameTrim),
+        {
+          pending: 'Đang cập nhật người chơi...',
+          success: 'Đã cập nhật người chơi',
+          error: 'Không thể cập nhật người chơi',
+        }
+      )
     }
-  }, [])
+  }, [runToastMutation])
 
   const handleDeletePlayer = useCallback(async (player) => {
     // Prevent deletion if player appears in any existing sessions (local check)
@@ -415,7 +513,7 @@ export default function App() {
       const peopleMatch = people.includes && (people.includes(player.id) || people.includes(player.name)) || people.some && people.some((p) => (p && (p.id === player.id || p.name === player.name)))
       return payerMatch || peopleMatch
     }))
-    if (inUseLocal) return alert('Không thể xóa: người chơi đã tham gia session')
+    if (inUseLocal) return toast.error('Không thể xóa: người chơi đã tham gia session')
 
     // Only remove locally after backend confirms deletion. If no backend, allow local delete.
     if (!mongoApi.isConfigured) {
@@ -424,37 +522,59 @@ export default function App() {
     }
 
     try {
-      await mongoApi.removePlayer(player.id)
+      await runToastMutation(
+        mongoApi.removePlayer(player.id),
+        {
+          pending: 'Đang xóa người chơi...',
+          success: 'Đã xóa người chơi',
+          error: (err) => {
+            const msg = String(err?.message || '')
+            if (msg.includes('player_in_sessions') || msg.includes('409')) {
+              return 'Không thể xóa: người chơi đã tham gia session'
+            }
+            if (msg.includes('404')) {
+              return 'Người chơi không tồn tại'
+            }
+            return 'Lỗi khi xóa người chơi'
+          },
+        }
+      )
       setPlayers((prev) => prev.filter((p) => p.id !== player.id))
     } catch (err) {
       console.error('Delete player error:', err)
-      const msg = String(err.message || '')
-      if (msg.includes('player_in_sessions') || msg.includes('409')) {
-        alert('Không thể xóa: người chơi đã tham gia session')
-      } else if (msg.includes('404')) {
-        alert('Người chơi không tồn tại')
-      } else {
-        alert('Lỗi khi xóa người chơi: ' + (err.message || err))
-      }
     }
   }, [])
 
   const handleEditExpenseType = useCallback((value, updated) => {
     setExpenseTypes((prev) => prev.map((t) => (t.value === value ? updated : t)))
     if (mongoApi.isConfigured) {
-      mongoApi.updateExpenseType(value, updated).catch(console.error)
+      void runToastMutation(
+        mongoApi.updateExpenseType(value, updated),
+        {
+          pending: 'Đang cập nhật loại kinh phí...',
+          success: 'Đã cập nhật loại kinh phí',
+          error: 'Không thể cập nhật loại kinh phí',
+        }
+      )
     }
-  }, [])
+  }, [runToastMutation])
 
   const handleDeleteExpenseType = useCallback((value) => {
     // only delete if no session uses this type
     const inUse = sessions.some((s) => (s.entries || []).some((e) => e.type === value))
-    if (inUse) return alert('Không thể xóa: loại này đang được sử dụng trong phiên')
+    if (inUse) return toast.error('Không thể xóa: loại này đang được sử dụng trong phiên')
     setExpenseTypes((prev) => prev.filter((t) => t.value !== value))
     if (mongoApi.isConfigured) {
-      mongoApi.removeExpenseType(value).catch(console.error)
+      void runToastMutation(
+        mongoApi.removeExpenseType(value),
+        {
+          pending: 'Đang xóa loại kinh phí...',
+          success: 'Đã xóa loại kinh phí',
+          error: 'Không thể xóa loại kinh phí',
+        }
+      )
     }
-  }, [sessions])
+  }, [sessions, runToastMutation])
 
   const handleCreatePlayer = useCallback(() => {
     const name = playerInputValue.trim()
@@ -635,7 +755,14 @@ export default function App() {
                     })()
                     setCombos(next)
                     if (mongoApi.isConfigured) {
-                      await mongoApi.upsertCombos(next)
+                      await runToastMutation(
+                        mongoApi.upsertCombos(next),
+                        {
+                          pending: 'Đang lưu combo...',
+                          success: 'Đã lưu combo',
+                          error: 'Không thể lưu combo',
+                        }
+                      )
                     } else {
                       // fallback to localStorage
                       const { saveCombos } = await import('./constants')
@@ -643,7 +770,7 @@ export default function App() {
                     }
                   } catch (e) {
                     console.error(e)
-                    alert('Lỗi khi lưu combo')
+                    if (!mongoApi.isConfigured) toast.error('Lỗi khi lưu combo')
                   }
                 }}
               />
@@ -662,14 +789,21 @@ export default function App() {
                     })()
                     setCombos(next)
                     if (mongoApi.isConfigured) {
-                      await mongoApi.upsertCombos(next)
+                      await runToastMutation(
+                        mongoApi.upsertCombos(next),
+                        {
+                          pending: 'Đang lưu combo...',
+                          success: 'Đã lưu combo',
+                          error: 'Không thể lưu combo',
+                        }
+                      )
                     } else {
                       const { saveCombos } = await import('./constants')
                       saveCombos(next)
                     }
                   } catch (e) {
                     console.error(e)
-                    alert('Lỗi khi lưu combo')
+                    if (!mongoApi.isConfigured) toast.error('Lỗi khi lưu combo')
                   }
                 }}
               />
@@ -897,6 +1031,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <ToastContainer position="top-right" autoClose={2200} newestOnTop closeOnClick pauseOnHover theme="colored" />
     </div>
   )
 }

@@ -78,7 +78,13 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
         </span>
       </div>
       
-      <div className="people-picker">
+      <div
+        className="people-picker"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+        }}
+      >
         {displayPlayers.map((p) => (
           <button
             key={p.id}
