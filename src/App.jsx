@@ -85,6 +85,7 @@ export default function App() {
   const [isAddSessionModalOpen, setIsAddSessionModalOpen] = useState(false)
   const [newSessionDate, setNewSessionDate] = useState(new Date().toISOString().split('T')[0])
   const [isEditingSessionInModal, setIsEditingSessionInModal] = useState(false)
+  const dbInitializedRef = useRef(false)
 
   const getNameById = useCallback((id) => {
     const p = players.find((pp) => pp.id === id)
@@ -95,6 +96,34 @@ export default function App() {
     const p = players.find((pp) => pp.name === name)
     return p ? p.id : null
   }, [players])
+
+  const normalizeSessionForStorage = useCallback((session, sourcePlayers) => {
+    const resolveId = (value) => {
+      if (!value && value !== 0) return ''
+      if (typeof value === 'object') {
+        const rawId = value.id != null ? String(value.id).trim() : ''
+        if (rawId) return rawId
+        const rawName = String(value.name || '').trim()
+        if (!rawName) return ''
+        const byName = (sourcePlayers || []).find((p) => String(p.name || '').trim() === rawName)
+        return byName ? String(byName.id) : rawName
+      }
+      const raw = String(value).trim()
+      if (!raw) return ''
+      const byId = (sourcePlayers || []).find((p) => String(p.id) === raw)
+      if (byId) return String(byId.id)
+      const byName = (sourcePlayers || []).find((p) => String(p.name || '').trim() === raw)
+      return byName ? String(byName.id) : raw
+    }
+
+    return {
+      ...session,
+      entries: (session.entries || []).map((entry) => ({
+        ...entry,
+        payer: resolveId(entry.payer),
+      })),
+    }
+  }, [])
 
   const ensurePlayersForNames = useCallback(async (names) => {
     const toCreate = []
@@ -149,7 +178,8 @@ export default function App() {
 
   // Tải dữ liệu từ MongoDB khi app khởi động
   useEffect(() => {
-    if (!mongoApi.isConfigured) return
+    if (!mongoApi.isConfigured || dbInitializedRef.current) return
+    dbInitializedRef.current = true
     setDbStatus('loading')
     Promise.allSettled([mongoApi.getAllSessions(), mongoApi.getAllPlayers(), mongoApi.getAllExpenseTypes(), mongoApi.getAllCombos()])
       .then(async ([sessionsResult, playersResult, typesResult, combosResult]) => {
@@ -166,9 +196,10 @@ export default function App() {
         }
         setPlayers(resolvedPlayers)
         const types = typesResult.status === 'fulfilled' ? typesResult.value : []
-        const resolvedSessions = docs.length > 0 ? docs : localSessions
+        const resolvedSessionsRaw = docs.length > 0 ? docs : localSessions
+        const resolvedSessions = resolvedSessionsRaw.map((s) => normalizeSessionForStorage(s, resolvedPlayers))
 
-        if (docs.length === 0 && localSessions.length > 0) {
+        if (sessionsResult.status === 'fulfilled' && docs.length === 0 && localSessions.length > 0) {
           mongoApi.importSessions(localSessions).catch(console.error)
         }
 
@@ -206,8 +237,8 @@ export default function App() {
           mongoApi.upsertExpenseTypes(DEFAULT_EXPENSE_TYPES).catch(console.error)
         }
 
-        if (sessionsResult.status === 'rejected' && namesResult.status === 'rejected' && typesResult.status === 'rejected') {
-          throw sessionsResult.reason || namesResult.reason
+        if (sessionsResult.status === 'rejected' && playersResult.status === 'rejected' && typesResult.status === 'rejected') {
+          throw sessionsResult.reason || playersResult.reason
         }
 
         setDbStatus('ready')
@@ -216,29 +247,30 @@ export default function App() {
         console.error('MongoDB load error:', err)
         setDbStatus('error')
       })
-  }, [])
+  }, [normalizeSessionForStorage])
 
   const handleSaveSession = useCallback((session) => {
-    const isExisting = sessions.some((item) => item.id === session.id)
-    ensurePlayersForNames(extractNamesFromSession(session))
+    const normalizedSession = normalizeSessionForStorage(session, players)
+    const isExisting = sessions.some((item) => item.id === normalizedSession.id)
+    ensurePlayersForNames(extractNamesFromSession(normalizedSession))
     setSessions((prev) => {
       const next = isExisting
-        ? prev.map((item) => (item.id === session.id ? session : item))
-        : [session, ...prev]
+        ? prev.map((item) => (item.id === normalizedSession.id ? normalizedSession : item))
+        : [normalizedSession, ...prev]
       saveSessions(next)
       return next
     })
     setCurrentSession(null)
     setIsAddSessionModalOpen(false)
-    setViewingSession(session)
+    setViewingSession(normalizedSession)
     if (mongoApi.isConfigured) {
       if (isExisting) {
-        mongoApi.updateSession(session).catch(console.error)
+        mongoApi.updateSession(normalizedSession).catch(console.error)
       } else {
-        mongoApi.insertSession(session).catch(console.error)
+        mongoApi.insertSession(normalizedSession).catch(console.error)
       }
     }
-  }, [extractNamesFromSession, ensurePlayersForNames, sessions])
+  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, sessions, players])
 
   const handleDeleteSession = useCallback((id) => {
     setSessions((prev) => {
@@ -255,19 +287,20 @@ export default function App() {
   }, [viewingSession])
 
   const handleUpdateSession = useCallback((updatedSession) => {
-    ensurePlayersForNames(extractNamesFromSession(updatedSession))
+    const normalizedSession = normalizeSessionForStorage(updatedSession, players)
+    ensurePlayersForNames(extractNamesFromSession(normalizedSession))
     setSessions((prev) => {
-      const next = prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
+      const next = prev.map((s) => (s.id === normalizedSession.id ? normalizedSession : s))
       saveSessions(next)
       return next
     })
 
-    setViewingSession((prev) => (prev?.id === updatedSession.id ? updatedSession : prev))
+    setViewingSession((prev) => (prev?.id === normalizedSession.id ? normalizedSession : prev))
 
     if (mongoApi.isConfigured) {
-      mongoApi.updateSession(updatedSession).catch(console.error)
+      mongoApi.updateSession(normalizedSession).catch(console.error)
     }
-  }, [extractNamesFromSession, ensurePlayersForNames])
+  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, players])
 
   const handleNewSession = useCallback(() => {
     setNewSessionDate(new Date().toISOString().split('T')[0])
@@ -339,7 +372,8 @@ export default function App() {
         const imported = JSON.parse(ev.target.result)
         if (!Array.isArray(imported)) return alert('File không hợp lệ')
         const existingIds = new Set(sessions.map((s) => s.id))
-        const newOnes = imported.filter((s) => !existingIds.has(s.id))
+        const normalizedImported = imported.map((s) => normalizeSessionForStorage(s))
+        const newOnes = normalizedImported.filter((s) => !existingIds.has(s.id))
         ensurePlayersForNames(getSessionPeople(newOnes))
         setSessions((prev) => {
           const merged = [...newOnes, ...prev]
@@ -356,7 +390,7 @@ export default function App() {
     }
     reader.readAsText(file)
     e.target.value = ''
-  }, [])
+  }, [normalizeSessionForStorage])
 
   const handleEditPlayer = useCallback((player, newName) => {
     // player: object { id, name } passed from PlayersPage
@@ -471,17 +505,41 @@ export default function App() {
 
     if (!sessions || sessions.length === 0) return stats
 
+    const idToName = new Map((players || []).map((p) => [String(p.id), String(p.name || '')]))
+    const resolveParticipantName = (value) => {
+      if (!value && value !== 0) return ''
+      if (typeof value === 'object') {
+        const rawId = value.id != null ? String(value.id) : ''
+        const rawName = String(value.name || '').trim()
+        if (rawId && idToName.has(rawId)) return idToName.get(rawId)
+        if (rawName) return rawName
+        return rawId
+      }
+      const raw = String(value).trim()
+      if (!raw) return ''
+      return idToName.get(raw) || raw
+    }
+
     // compute date span in months (inclusive)
-    const dates = sessions.map((s) => new Date(s.date))
-    const minDate = new Date(Math.min(...dates))
-    const maxDate = new Date(Math.max(...dates))
-    const monthsSpan = (maxDate.getFullYear() - minDate.getFullYear()) * 12 + (maxDate.getMonth() - minDate.getMonth()) + 1
+    const dates = sessions
+      .map((s) => new Date(s.date))
+      .filter((d) => !Number.isNaN(d.getTime()))
+    const monthsSpan = (() => {
+      if (dates.length === 0) return 1
+      const minDate = new Date(Math.min(...dates))
+      const maxDate = new Date(Math.max(...dates))
+      return (maxDate.getFullYear() - minDate.getFullYear()) * 12 + (maxDate.getMonth() - minDate.getMonth()) + 1
+    })()
 
     for (const session of sessions) {
       const participants = new Set()
       ;(session.entries || []).forEach((entry) => {
-        if (entry.payer) participants.add(getNameById(entry.payer) || entry.payer)
-        ;(entry.people || []).forEach((p) => participants.add(getNameById(p) || p))
+        const payerName = resolveParticipantName(entry.payer)
+        if (payerName) participants.add(payerName)
+        ;(entry.people || []).forEach((p) => {
+          const name = resolveParticipantName(p)
+          if (name) participants.add(name)
+        })
       })
 
       for (const name of Object.keys(stats)) {
@@ -495,7 +553,7 @@ export default function App() {
     }
 
     return stats
-  }, [sessions, playerNames])
+  }, [sessions, players])
 
   return (
     <div className="app">

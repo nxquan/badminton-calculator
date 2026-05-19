@@ -17,17 +17,20 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
   // Normalize entries for UI: use names for calculations/display, include `{id,name}` objects, and prepare form entries with ids
   const normalizedEntries = (session.entries || []).map((e) => {
+    // Ensure `people` is normalized to an array of `{id,name}` objects and an array of names
     const peopleObjs = (e.people || []).map((p) => (typeof p === 'object' ? { id: getId(p), name: getName(p) } : { id: getId(p), name: getName(p) }))
     const peopleNames = peopleObjs.map((p) => p.name)
     const peopleIds = peopleObjs.map((p) => p.id)
-    const payerObj = typeof e.payer === 'object' ? e.payer : { id: getId(e.payer), name: getName(e.payer) }
+    const payerObj = typeof e.payer === 'object' ? { id: getId(e.payer), name: getName(e.payer) } : { id: getId(e.payer), name: getName(e.payer) }
+
     return {
       ...e,
       // for calculations and display we use names
       payer: payerObj.name,
       payerObj,
-      people: peopleNames,
+      // normalized people arrays for both object and name-based uses
       peopleObjs,
+      people: peopleNames,
       // keep ids handy for editing
       _peopleIds: peopleIds,
       _payerId: payerObj.id,
@@ -39,8 +42,23 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   const totals = Object.fromEntries(Object.entries(totalsRaw).map(([k, v]) => [(getName(k) || k), v]))
   const grandTotal = Object.values(totals).reduce((sum, value) => sum + value, 0)
   const participants = sortPlayerNames(Object.keys(totals))
+  const defaultTransferTo = useMemo(() => {
+    const counts = {}
+    for (const entry of normalizedEntries) {
+      const payerName = entry?.payer || ''
+      if (!payerName) continue
+      counts[payerName] = (counts[payerName] || 0) + 1
+    }
+
+    const ranked = Object.entries(counts).sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1]
+      return a[0].localeCompare(b[0], 'vi', { sensitivity: 'base' })
+    })
+
+    return ranked[0]?.[0] || participants[0] || ''
+  }, [normalizedEntries, participants])
   const [activeResultTab, setActiveResultTab] = useState('entries')
-  const [transferTo, setTransferTo] = useState(participants[0] || '')
+  const [transferTo, setTransferTo] = useState(defaultTransferTo)
   const [settledPlayers, setSettledPlayers] = useState(session.settledPlayers || [])
 
   useEffect(() => {
@@ -71,16 +89,16 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
       // ignore
     }
 
-    setTransferTo(participants[0] || '')
-  }, [session.id, participants])
+    setTransferTo(defaultTransferTo)
+  }, [session.id, participants, defaultTransferTo])
 
   useEffect(() => {
     if (!participants.length) {
       setTransferTo('')
     } else if (transferTo && !participants.includes(transferTo)) {
-      setTransferTo(participants[0])
+      setTransferTo(defaultTransferTo || participants[0])
     }
-  }, [participants])
+  }, [participants, transferTo, defaultTransferTo])
 
   const handleToggleSettled = (name) => {
     const nextSettled = settledPlayers.includes(name)
@@ -134,8 +152,8 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   const playerColumns = useMemo(() => {
     const names = new Set()
     for (const entry of normalizedEntries) {
-      for (const pName of (entry.people || [])) {
-        names.add(pName)
+      for (const obj of (entry.people || [])) {
+        names.add(obj)
       }
     }
     return sortPlayerNames([...names])
@@ -163,7 +181,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     })
     return Object.entries(groups).map(([type, items]) => ({ type, items }))
   }, [sortedEntries])
-  const canChangeTransferTo = settledPlayers.length === 0
+  const canChangeTransferTo = canEditSession
 
   // Calculate breakdown by expense type for each person
   const expenseTypeBreakdown = useMemo(() => {
@@ -189,6 +207,19 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     })
     return sortExpenseTypes(typeArray)
   }, [session.entries, expenseTypes])
+
+  // Total amount that should be transferred to `transferTo` (sum of positive owes)
+  const transferTotal = useMemo(() => {
+    if (!transferTo) return 0
+    return Object.entries(totals).reduce((sum, [name, amount]) => {
+      if (name === transferTo) return sum
+      const paid = normalizedEntries
+        .filter((entry) => entry.payer === name)
+        .reduce((s, entry) => s + entry.amount, 0)
+      const owe = amount - paid
+      return sum + Math.max(0, owe)
+    }, 0)
+  }, [transferTo, totals, normalizedEntries])
 
   return (
     <div>
@@ -412,7 +443,13 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                       {transferTo && (
                         <td>
                           {name === transferTo ? (
-                            <span style={{ color: 'var(--text-secondary)' }}>—</span>
+                            transferTotal > 0 ? (
+                              <span style={{ color: 'var(--success)', fontWeight: 600 }}>
+                                Được nhận {formatMoney(Math.round(transferTotal * 1000))}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--text-secondary)' }}>—</span>
+                            )
                           ) : owe > 0 ? (
                             <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
                               {formatMoney(Math.round(owe * 1000))}
@@ -468,7 +505,11 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                     </td>
                   )
                 })}
-                {transferTo && <td />}
+                {transferTo && (
+                  <td style={{ fontWeight: 600 }}>
+                    {transferTotal > 0 ? formatMoney(Math.round(transferTotal * 1000)) : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+                  </td>
+                )}
                 <td />
                 <td />
               </tr>

@@ -20,6 +20,49 @@ const sessions = db.collection('sessions')
 const players = db.collection('players')
 const expenseTypes = db.collection('expense_types')
 const combos = db.collection('combos')
+
+// Keep one document per app-level session id and enforce uniqueness for future writes.
+try {
+  const duplicates = await sessions.aggregate([
+    { $match: { id: { $exists: true, $ne: null } } },
+    {
+      $group: {
+        _id: '$id',
+        docs: {
+          $push: {
+            _id: '$_id',
+            createdAt: '$createdAt',
+          },
+        },
+        count: { $sum: 1 },
+      },
+    },
+    { $match: { count: { $gt: 1 } } },
+  ]).toArray()
+
+  let removedCount = 0
+  for (const dup of duplicates) {
+    const sorted = (dup.docs || []).slice().sort((a, b) => {
+      const ta = Date.parse(String(a.createdAt || '')) || 0
+      const tb = Date.parse(String(b.createdAt || '')) || 0
+      return tb - ta
+    })
+    const removeIds = sorted.slice(1).map((d) => d._id)
+    if (removeIds.length > 0) {
+      const result = await sessions.deleteMany({ _id: { $in: removeIds } })
+      removedCount += result.deletedCount || 0
+    }
+  }
+
+  if (removedCount > 0) {
+    console.log(`🧹 Removed duplicate sessions: ${removedCount}`)
+  }
+
+  await sessions.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $exists: true, $ne: null } } })
+} catch (e) {
+  console.error('Session dedupe/index setup warning:', e.message)
+}
+
 console.log('✅ Kết nối MongoDB thành công')
 
 // ── API routes ──────────────────────────────────────────────
@@ -90,13 +133,10 @@ app.get('/api/sessions', async (req, res) => {
 
 // Thêm 1 session
 app.post('/api/sessions', async (req, res) => {
-  try {
-    const doc = { ...req.body, createdAt: req.body.createdAt || new Date().toISOString() }
-    await sessions.insertOne(doc)
-    res.json({ ok: true })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
+  // Creating sessions via this endpoint is disabled to prevent automatic
+  // insertion/upsert of session documents. Use the session creation workflow
+  // approved by the application or create sessions directly in the database.
+  res.status(403).json({ error: 'creating_sessions_disabled', message: 'Creating sessions via this API is disabled.' })
 })
 
 // Lấy danh sách tên người chơi
@@ -113,53 +153,10 @@ app.get('/api/players', async (req, res) => {
 
 // Bulk upsert danh sách tên người chơi (key chính là tên)
 app.post('/api/players/bulk', async (req, res) => {
-  try {
-    // Accept either array of strings (names) or array of objects { id?, name }
-    const items = Array.isArray(req.body) ? req.body : []
-    const normalized = []
-    for (const it of items) {
-      if (!it) continue
-      if (typeof it === 'string') {
-        const name = String(it).trim()
-        if (name) normalized.push({ name })
-      } else if (typeof it === 'object') {
-        const name = String(it.name || '').trim()
-        if (name) normalized.push({ id: it.id, name })
-      }
-    }
-
-    const byName = [...new Map(normalized.map((p) => [p.name, p])).values()]
-    if (byName.length === 0) return res.json({ ok: true, upserted: 0 })
-
-    // Upsert by name to preserve one document per name. If an id is provided and
-    // document doesn't exist, use provided id as _id; otherwise generate one.
-    const ops = []
-    for (const p of byName) {
-      const idValue = p.id && String(p.id).trim() ? p.id : undefined
-      if (idValue) {
-        ops.push({
-          updateOne: {
-            filter: { name: p.name },
-            update: { $setOnInsert: { _id: idValue, name: p.name } },
-            upsert: true,
-          },
-        })
-      } else {
-        ops.push({
-          updateOne: {
-            filter: { name: p.name },
-            update: { $setOnInsert: { name: p.name } },
-            upsert: true,
-          },
-        })
-      }
-    }
-
-    if (ops.length) await players.bulkWrite(ops)
-    res.json({ ok: true, upserted: byName.length })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
+  // Bulk-creation/upsert of players is disabled to prevent automatic creation
+  // of player documents from arbitrary input. Manage players via the admin
+  // interface or direct DB operations.
+  res.status(403).json({ error: 'creating_players_disabled', message: 'Bulk creating players via this API is disabled.' })
 })
 
 // Lấy danh sách loại chi phí
@@ -317,7 +314,30 @@ app.delete('/api/sessions/:id', async (req, res) => {
 app.put('/api/sessions/:id', async (req, res) => {
   try {
     const id = req.params.id
-    const doc = { ...req.body, id }
+    const playerDocs = await players.find({}).toArray()
+    const nameToId = new Map(playerDocs.map((p) => [String(p.name || '').trim(), String(p._id)]))
+
+    const resolveId = (value) => {
+      if (!value && value !== 0) return ''
+      if (typeof value === 'object') {
+        const rawId = value.id != null ? String(value.id).trim() : ''
+        if (rawId) return rawId
+        const rawName = String(value.name || '').trim()
+        return nameToId.get(rawName) || rawName
+      }
+      const raw = String(value).trim()
+      return nameToId.get(raw) || raw
+    }
+
+    const doc = {
+      ...req.body,
+      id,
+      entries: (req.body.entries || []).map((entry) => ({
+        ...entry,
+        payer: resolveId(entry.payer),
+        people: Array.isArray(entry.people) ? entry.people.map(resolveId).filter(Boolean) : [],
+      })),
+    }
     const result = await sessions.updateOne(
       { id },
       { $set: doc },
@@ -335,16 +355,9 @@ app.put('/api/sessions/:id', async (req, res) => {
 
 // Bulk insert (dùng khi import JSON)
 app.post('/api/sessions/bulk', async (req, res) => {
-  try {
-    const docs = req.body.map((s) => ({
-      ...s,
-      createdAt: s.createdAt || new Date().toISOString(),
-    }))
-    if (docs.length) await sessions.insertMany(docs)
-    res.json({ ok: true, inserted: docs.length })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
+  // Bulk import/upsert of sessions is disabled to avoid automatic creation of
+  // session documents. Use controlled import tools or manage sessions in DB.
+  res.status(403).json({ error: 'bulk_sessions_disabled', message: 'Bulk creating sessions via this API is disabled.' })
 })
 
 // Cập nhật tên người chơi

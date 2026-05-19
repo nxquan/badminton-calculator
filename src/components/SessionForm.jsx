@@ -132,9 +132,6 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
     setNote('')
     setPayer(lastPayer)
     setPeople(['san', 'cau', 'tra-da'].includes(type) ? people : [])
-    if (onAdded) {
-      onAdded()
-    }
   }
 
 

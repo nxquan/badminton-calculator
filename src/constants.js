@@ -79,10 +79,23 @@ export function getEntryLabel(entry, expenseTypes = DEFAULT_EXPENSE_TYPES) {
 export function calculateTotals(entries) {
   const totals = {}
 
+  const normalizePersonKey = (value) => {
+    if (!value && value !== 0) return ''
+    if (typeof value === 'object') return String(value.id || value.name || '')
+    return String(value)
+  }
+
   for (const entry of entries) {
-    if (entry.people.length === 0 || entry.amount <= 0) continue
-    const perPerson = entry.amount / entry.people.length
-    for (const person of entry.people) {
+    const payerKey = normalizePersonKey(entry.payer)
+    if (payerKey) {
+      totals[payerKey] = totals[payerKey] || 0
+    }
+
+    const people = Array.isArray(entry.people) ? entry.people.map(normalizePersonKey).filter(Boolean) : []
+    if (people.length === 0 || entry.amount <= 0) continue
+
+    const perPerson = entry.amount / people.length
+    for (const person of people) {
       totals[person] = (totals[person] || 0) + perPerson
     }
   }
