@@ -106,6 +106,262 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
 }
 
 
+function ExpenseTypePicker({ value, expenseTypes = [], onSelect }) {
+  const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+
+  const selectedType = useMemo(
+    () => sortedTypes.find((t) => t.value === value) || null,
+    [sortedTypes, value]
+  )
+
+  useEffect(() => {
+    setQuery(selectedType ? selectedType.label : '')
+  }, [selectedType])
+
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [query, open])
+
+  const filteredTypes = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return sortedTypes
+    return sortedTypes.filter((t) => {
+      const haystack = `${t.label || ''} ${t.value || ''}`.toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [query, sortedTypes])
+
+  const chooseType = (type) => {
+    onSelect(type.value)
+    setQuery(type.label)
+    setOpen(false)
+    setHighlightedIndex(0)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filteredTypes.length > 0) chooseType(filteredTypes[highlightedIndex] || filteredTypes[0])
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpen(true)
+      setHighlightedIndex((index) => Math.min(index + 1, filteredTypes.length - 1))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setOpen(true)
+      setHighlightedIndex((index) => Math.max(index - 1, 0))
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        {selectedType && (
+          <span
+            style={{
+              position: 'absolute',
+              left: 10,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 2,
+              pointerEvents: 'none',
+              fontSize: 18,
+            }}
+          >
+            {selectedType.emoji || '🧾'}
+          </span>
+        )}
+      <input
+        type="text"
+        value={query}
+        placeholder="Nhập tên chi phí..."
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        style={{ paddingLeft: selectedType ? '38px' : undefined }}
+      />
+      </div>
+
+      {open && filteredTypes.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            boxShadow: 'var(--shadow-lg)',
+            maxHeight: '220px',
+            overflow: 'auto',
+          }}
+        >
+          {filteredTypes.slice(0, 8).map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => chooseType(t)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 10px',
+                border: 'none',
+                background: filteredTypes[highlightedIndex]?.value === t.value ? 'rgba(255, 147, 46, 0.12)' : 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={() => setHighlightedIndex(filteredTypes.findIndex((item) => item.value === t.value))}
+            >
+              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{t.emoji || '🧾'}</span>
+              <span>{t.label}</span>
+              {t.value === value && (
+                <span style={{ marginLeft: 'auto', color: 'var(--success)', fontSize: 12, fontWeight: 700 }}>✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PayerPicker({ value, players = [], onSelect }) {
+  const sortedPlayers = useMemo(
+    () => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })),
+    [players]
+  )
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+
+  const selectedPlayer = useMemo(
+    () => sortedPlayers.find((p) => p.id === value) || null,
+    [sortedPlayers, value]
+  )
+
+  useEffect(() => {
+    setQuery(selectedPlayer ? selectedPlayer.name : '')
+  }, [selectedPlayer])
+
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [query, open])
+
+  const filteredPlayers = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return sortedPlayers
+    return sortedPlayers.filter((player) => {
+      const haystack = `${player.name || ''} ${player.id || ''}`.toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [query, sortedPlayers])
+
+  const choosePlayer = (player) => {
+    onSelect(player.id)
+    setQuery(player.name)
+    setOpen(false)
+    setHighlightedIndex(0)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filteredPlayers.length > 0) choosePlayer(filteredPlayers[highlightedIndex] || filteredPlayers[0])
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpen(true)
+      setHighlightedIndex((index) => Math.min(index + 1, filteredPlayers.length - 1))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setOpen(true)
+      setHighlightedIndex((index) => Math.max(index - 1, 0))
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type="text"
+        value={query}
+        placeholder="Chọn người trả..."
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+      />
+
+      {open && filteredPlayers.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            boxShadow: 'var(--shadow-lg)',
+            maxHeight: '220px',
+            overflow: 'auto',
+          }}
+        >
+          {filteredPlayers.map((player) => (
+            <button
+              key={player.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => choosePlayer(player)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 10px',
+                border: 'none',
+                background: filteredPlayers[highlightedIndex]?.id === player.id ? 'rgba(255, 147, 46, 0.12)' : 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={() => setHighlightedIndex(filteredPlayers.findIndex((item) => item.id === player.id))}
+            >
+              <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>👤</span>
+              <span>{player.name}</span>
+              {player.id === value && (
+                <span style={{ marginLeft: 'auto', color: 'var(--success)', fontSize: 12, fontWeight: 700 }}>✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names = [], expenseTypes, combos = [], onAddName, onAddExpenseType, onAdded }) {
   const [type, setType] = useState(lastType)
   const [hours, setHours] = useState(type === 'san' ? '2' : '')
@@ -114,8 +370,6 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
   const [people, setPeople] = useState(lastPeople)
   const [payer, setPayer] = useState(lastPayer)
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
-  const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
-
   const handleSubmit = (e) => {
     e.preventDefault()
     const numAmount = Number(amount)
@@ -147,8 +401,10 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Loại chi phí</label>
-          <select value={type} onChange={(e) => {
-            const newType = e.target.value
+          <ExpenseTypePicker
+            value={type}
+            expenseTypes={sortedTypes}
+            onSelect={(newType) => {
             setType(newType)
             if (newType === 'san') {
               setHours('2')
@@ -162,13 +418,8 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
             if (!['san', 'cau', 'tra-da'].includes(newType)) {
               setPeople([])
             }
-          }}>
-            {sortedTypes.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.emoji || '🧾'} {t.label}
-              </option>
-            ))}
-          </select>
+            }}
+          />
         </div>
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '140px' }}>
           <label>Số tiền (nghìn đồng)</label>
@@ -209,14 +460,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Người trả</label>
-          <select value={payer} onChange={(e) => setPayer(e.target.value)}>
-            <option value="">-- Chọn người trả --</option>
-            {sortedPlayers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <PayerPicker value={payer} players={players} onSelect={setPayer} />
         </div>
       </div>
 
@@ -261,7 +505,6 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
   const [people, setPeople] = useState(entry.people)
   const [customName, setCustomName] = useState('')
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
-  const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
 
   useEffect(() => {
     setType(entry.type)
@@ -296,21 +539,18 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Loại chi phí</label>
-          <select value={type} onChange={(e) => {
-            const newType = e.target.value
+          <ExpenseTypePicker
+            value={type}
+            expenseTypes={sortedTypes}
+            onSelect={(newType) => {
             setType(newType)
             
             // Reset people if type is not one of the main types
             if (!['san', 'cau', 'tra-da'].includes(newType)) {
               setPeople([])
             }
-          }}>
-            {sortedTypes.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.emoji || '🧾'} {t.label}
-              </option>
-            ))}
-          </select>
+            }}
+          />
         </div>
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '140px' }}>
           <label>Số tiền (nghìn đồng)</label>
@@ -347,14 +587,7 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
       <div className="form-row">
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Người trả</label>
-          <select value={payer} onChange={(e) => setPayer(e.target.value)}>
-            <option value="">-- Chọn người trả --</option>
-            {sortedPlayers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <PayerPicker value={payer} players={players} onSelect={setPayer} />
         </div>
       </div>
 
@@ -639,8 +872,9 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
               border: 'none',
               padding: 0,
               margin: 0,
-              cursor: 'pointer',
-              zIndex: 3,
+              cursor: 'default',
+              pointerEvents: 'none',
+              zIndex: 0,
               background: 'transparent',
             }}
             aria-label="Chọn ngày"
