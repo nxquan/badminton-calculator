@@ -148,38 +148,18 @@ export default function App() {
     }
   }, [])
 
-  const ensurePlayersForNames = useCallback(async (names) => {
-    const toCreate = []
+  const syncPlayersForNames = useCallback((names) => {
+    const toAdd = []
     for (const name of names) {
       if (!name) continue
       if (!players.some((p) => p.name === name)) {
-        const id = crypto.randomUUID()
-        toCreate.push({ id, name })
+        toAdd.push({ id: crypto.randomUUID(), name, avatar: '' })
       }
     }
-    if (toCreate.length === 0) return
-    setPlayers((prev) => [...prev, ...toCreate])
-    if (mongoApi.isConfigured) {
-      try {
-        await runToastMutation(
-          (async () => {
-            for (const player of toCreate) {
-              await mongoApi.createPlayer(player)
-            }
-          })(),
-          {
-            pending: 'Đang tạo người chơi...',
-            success: `Đã tạo ${toCreate.length} người chơi`,
-            error: 'Không thể tạo người chơi',
-          }
-        )
-        const fresh = await mongoApi.getAllPlayers()
-        setPlayers(Array.isArray(fresh) ? fresh : [])
-      } catch (e) {
-        console.error(e)
-      }
-    }
-  }, [players, runToastMutation])
+    if (toAdd.length === 0) return []
+    setPlayers((prev) => [...prev, ...toAdd])
+    return toAdd
+  }, [players])
 
   const extractNamesFromSession = useCallback((session) => {
     // returns array of names (resolve ids to names if needed)
@@ -192,8 +172,41 @@ export default function App() {
   }, [players])
 
   const handleAddPlayerName = useCallback((name) => {
-    ensurePlayersForNames([name])
-  }, [ensurePlayersForNames])
+    syncPlayersForNames([name])
+  }, [syncPlayersForNames])
+
+  const handleCreatePlayer = useCallback(async () => {
+    const name = playerInputValue.trim()
+    if (!name) return
+
+    if (players.some((player) => player.name === name)) {
+      setPlayerInputValue('')
+      setIsAddPlayerModalOpen(false)
+      return
+    }
+
+    const player = { id: crypto.randomUUID(), name, avatar: '' }
+    setPlayers((prev) => [...prev, player])
+    setPlayerInputValue('')
+    setIsAddPlayerModalOpen(false)
+
+    if (mongoApi.isConfigured) {
+      try {
+        await runToastMutation(
+          mongoApi.createPlayer(player),
+          {
+            pending: 'Đang tạo người chơi...',
+            success: 'Đã tạo người chơi',
+            error: 'Không thể tạo người chơi',
+          }
+        )
+        const fresh = await mongoApi.getAllPlayers()
+        setPlayers(Array.isArray(fresh) ? fresh : [])
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }, [playerInputValue, players, runToastMutation])
 
   const playerNames = useMemo(() => sortPlayerNames(players.map((p) => p.name)), [players])
 
@@ -236,7 +249,7 @@ export default function App() {
         let resolvedPlayers = []
         if (Array.isArray(fetchedPlayersRaw) && fetchedPlayersRaw.length && typeof fetchedPlayersRaw[0] === 'string') {
           // legacy: convert strings to objects with generated ids
-          resolvedPlayers = fetchedPlayersRaw.map((n) => ({ id: crypto.randomUUID(), name: n }))
+          resolvedPlayers = fetchedPlayersRaw.map((n) => ({ id: crypto.randomUUID(), name: n, avatar: '' }))
         } else if (Array.isArray(fetchedPlayersRaw)) {
           resolvedPlayers = fetchedPlayersRaw
         }
@@ -262,24 +275,8 @@ export default function App() {
         // If no players in DB but sessions have names, ensure players exist
         const derived = getSessionPeople(resolvedSessions)
         if (resolvedPlayers.length === 0 && derived.length > 0) {
-          const toCreate = [...new Set(derived)].map((n) => ({ id: crypto.randomUUID(), name: n }))
-          try {
-            await runToastMutation(
-              (async () => {
-                for (const player of toCreate) {
-                  await mongoApi.createPlayer(player)
-                }
-              })(),
-              {
-                pending: 'Đang đồng bộ người chơi...',
-                success: `Đã đồng bộ ${toCreate.length} người chơi`,
-                error: 'Không thể đồng bộ người chơi',
-              }
-            )
-            setPlayers((prev) => [...prev, ...toCreate])
-          } catch (err) {
-            console.error(err)
-          }
+          const toCreate = [...new Set(derived)].map((n) => ({ id: crypto.randomUUID(), name: n, avatar: '' }))
+          setPlayers(toCreate)
         }
 
         const resolvedTypes = sortExpenseTypes([...DEFAULT_EXPENSE_TYPES, ...types])
@@ -324,7 +321,7 @@ export default function App() {
   const handleSaveSession = useCallback((session) => {
     const normalizedSession = normalizeSessionForStorage(session, players)
     const isExisting = sessions.some((item) => item.id === normalizedSession.id)
-    ensurePlayersForNames(extractNamesFromSession(normalizedSession))
+    syncPlayersForNames(extractNamesFromSession(normalizedSession))
     setSessions((prev) => {
       const next = isExisting
         ? prev.map((item) => (item.id === normalizedSession.id ? normalizedSession : item))
@@ -345,7 +342,7 @@ export default function App() {
         }
       )
     }
-  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, sessions, players, runToastMutation])
+  }, [extractNamesFromSession, normalizeSessionForStorage, sessions, players, runToastMutation, syncPlayersForNames])
 
   const handleDeleteSession = useCallback((id) => {
     setSessions((prev) => {
@@ -370,7 +367,7 @@ export default function App() {
 
   const handleUpdateSession = useCallback((updatedSession) => {
     const normalizedSession = normalizeSessionForStorage(updatedSession, players)
-    ensurePlayersForNames(extractNamesFromSession(normalizedSession))
+    syncPlayersForNames(extractNamesFromSession(normalizedSession))
     setSessions((prev) => {
       const next = prev.map((s) => (s.id === normalizedSession.id ? normalizedSession : s))
       saveSessions(next)
@@ -389,7 +386,7 @@ export default function App() {
         }
       )
     }
-  }, [extractNamesFromSession, ensurePlayersForNames, normalizeSessionForStorage, players, runToastMutation])
+  }, [extractNamesFromSession, normalizeSessionForStorage, players, runToastMutation, syncPlayersForNames])
 
   const handleNewSession = useCallback(() => {
     setNewSessionDate(new Date().toISOString().split('T')[0])
@@ -417,7 +414,7 @@ export default function App() {
 
   const handleEditSession = useCallback(async (session) => {
     // Ensure players exist for any legacy names in session, then normalize entries to ids
-    await ensurePlayersForNames(extractNamesFromSession(session))
+    syncPlayersForNames(extractNamesFromSession(session))
     let freshPlayers = players
     if (mongoApi.isConfigured) {
       try {
@@ -439,7 +436,7 @@ export default function App() {
     setCurrentSession(normalized)
     setIsEditingSessionInModal(true)
     setIsAddSessionModalOpen(true)
-  }, [ensurePlayersForNames, extractNamesFromSession, players])
+  }, [extractNamesFromSession, players, syncPlayersForNames])
 
   const handleExport = useCallback(() => {
     const data = JSON.stringify(sessions, null, 2)
@@ -466,7 +463,7 @@ export default function App() {
         const existingIds = new Set(sessions.map((s) => s.id))
         const normalizedImported = imported.map((s) => normalizeSessionForStorage(s))
         const newOnes = normalizedImported.filter((s) => !existingIds.has(s.id))
-        ensurePlayersForNames(getSessionPeople(newOnes))
+        syncPlayersForNames(getSessionPeople(newOnes))
         setSessions((prev) => {
           const merged = [...newOnes, ...prev]
           saveSessions(merged)
@@ -489,7 +486,7 @@ export default function App() {
     }
     reader.readAsText(file)
     e.target.value = ''
-  }, [normalizeSessionForStorage, ensurePlayersForNames, runToastMutation, sessions])
+  }, [normalizeSessionForStorage, runToastMutation, sessions, syncPlayersForNames])
 
   const handleEditPlayer = useCallback((player, newName) => {
     // player: object { id, name } passed from PlayersPage
@@ -501,13 +498,41 @@ export default function App() {
     // No need to update sessions (they reference ids). Only persist player name change.
     if (mongoApi.isConfigured) {
       void runToastMutation(
-        mongoApi.updatePlayer(id, newNameTrim),
+        mongoApi.updatePlayer(id, { name: newNameTrim }),
         {
           pending: 'Đang cập nhật người chơi...',
           success: 'Đã cập nhật người chơi',
           error: 'Không thể cập nhật người chơi',
         }
       )
+    }
+  }, [runToastMutation])
+
+  const handleUpdatePlayerAvatar = useCallback(async (player, file) => {
+    if (!player || !file) return
+
+    const avatar = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result || ''))
+      reader.onerror = () => reject(reader.error || new Error('Không thể đọc ảnh'))
+      reader.readAsDataURL(file)
+    })
+
+    setPlayers((prev) => prev.map((p) => (p.id === player.id ? { ...p, avatar } : p)))
+
+    if (mongoApi.isConfigured) {
+      try {
+        await runToastMutation(
+          mongoApi.updatePlayer(player.id, { avatar }),
+          {
+            pending: 'Đang tải avatar...',
+            success: 'Đã cập nhật avatar',
+            error: 'Không thể cập nhật avatar',
+          }
+        )
+      } catch (err) {
+        console.error('Update avatar error:', err)
+      }
     }
   }, [runToastMutation])
 
@@ -583,14 +608,6 @@ export default function App() {
       )
     }
   }, [sessions, runToastMutation])
-
-  const handleCreatePlayer = useCallback(() => {
-    const name = playerInputValue.trim()
-    if (!name) return
-    handleAddPlayerName(name)
-    setPlayerInputValue('')
-    setIsAddPlayerModalOpen(false)
-  }, [playerInputValue, handleAddPlayerName])
 
   const handleCreateExpenseType = useCallback(() => {
     const label = expenseTypeLabel.trim()
@@ -713,7 +730,7 @@ export default function App() {
                 onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
                 onDeleteSession={handleDeleteSession}
                 onNewSession={handleNewSession}
-                onSyncPlayers={() => ensurePlayersForNames(getSessionPeople(sessions))}
+                onSyncPlayers={() => syncPlayersForNames(getSessionPeople(sessions))}
               />
             )}
             {sidebarView.view === 'match-history' && (
@@ -745,6 +762,7 @@ export default function App() {
                   setEditPlayerNewName(p.name)
                   setIsEditPlayerModalOpen(true)
                 }}
+                onAvatarUpload={handleUpdatePlayerAvatar}
                 onDeleteClick={handleDeletePlayer}
               />
             )}
@@ -863,7 +881,7 @@ export default function App() {
                   value={playerInputValue}
                   onChange={(e) => setPlayerInputValue(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreatePlayer()
+                    if (e.key === 'Enter') void handleCreatePlayer()
                   }}
                   autoFocus
                 />
@@ -871,7 +889,7 @@ export default function App() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setIsAddPlayerModalOpen(false)}>Đóng</button>
-              <button className="btn btn-primary" onClick={handleCreatePlayer}>Tạo</button>
+              <button className="btn btn-primary" onClick={() => void handleCreatePlayer()}>Tạo</button>
             </div>
           </div>
         </div>

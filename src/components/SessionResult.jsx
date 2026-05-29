@@ -370,10 +370,17 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 fontWeight: 500,
                 color: 'var(--text-secondary)',
                 marginBottom: '4px',
-                display: 'block',
+                display: 'flex',
+                alignItems: 'center',
+
               }}
             >
               Chuyển tiền cho ai?
+              {!canChangeTransferTo && (
+              <div style={{ marginLeft: '6px', color: 'var(--color-error)', fontWeight: 600 }}>
+                Đã có người thanh toán nên không thể đổi người chuyển tiền.
+              </div>
+            )}
             </label>
             <div className="people-picker">
               {participants.map((name) => (
@@ -388,11 +395,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 </button>
               ))}
             </div>
-            {!canChangeTransferTo && (
-              <div style={{ marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                Đã có người thanh toán nên không thể đổi người chuyển tiền.
-              </div>
-            )}
+            
           </div>
 
           <table className="result-table">
