@@ -35,7 +35,7 @@ export function formatMoney(amount) {
   return new Intl.NumberFormat('vi-VN').format(amount) + 'đ'
 }
 
-export const DEFAULT_PAYER = 'Trí'
+export const DEFAULT_PAYER = 'Minh Trí'
 
 export function sortExpenseTypes(types) {
   return [...new Map(types.map((type) => [type.value, type])).values()].sort((a, b) =>
