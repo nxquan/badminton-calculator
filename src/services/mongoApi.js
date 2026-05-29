@@ -31,6 +31,11 @@ export async function getAllPlayers() {
   return api('GET', '/players')
 }
 
+/** Tạo 1 người chơi */
+export async function createPlayer(player) {
+  return api('POST', '/players', player)
+}
+
 /** Lấy danh sách loại chi phí */
 export async function getAllExpenseTypes() {
   return api('GET', '/expense-types')

@@ -162,7 +162,11 @@ export default function App() {
     if (mongoApi.isConfigured) {
       try {
         await runToastMutation(
-          mongoApi.upsertPlayers(toCreate),
+          (async () => {
+            for (const player of toCreate) {
+              await mongoApi.createPlayer(player)
+            }
+          })(),
           {
             pending: 'Đang tạo người chơi...',
             success: `Đã tạo ${toCreate.length} người chơi`,
@@ -261,7 +265,11 @@ export default function App() {
           const toCreate = [...new Set(derived)].map((n) => ({ id: crypto.randomUUID(), name: n }))
           try {
             await runToastMutation(
-              mongoApi.upsertPlayers(toCreate),
+              (async () => {
+                for (const player of toCreate) {
+                  await mongoApi.createPlayer(player)
+                }
+              })(),
               {
                 pending: 'Đang đồng bộ người chơi...',
                 success: `Đã đồng bộ ${toCreate.length} người chơi`,

@@ -4,6 +4,7 @@ import cors from 'cors'
 import { MongoClient } from 'mongodb'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { randomUUID } from 'crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -181,6 +182,34 @@ app.get('/api/players', async (req, res) => {
     const docs = await players.find({}).sort({ name: 1 }).toArray()
     // return normalized format: [{ id, name }]
     res.json(docs.map((doc) => ({ id: doc._id, name: doc.name || String(doc._id) })))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Tạo 1 người chơi duy nhất
+app.post('/api/players', async (req, res) => {
+  try {
+    if (Array.isArray(req.body)) {
+      return res.status(400).json({ error: 'single_player_only', message: 'Chỉ được tạo 1 người chơi mỗi lần.' })
+    }
+
+    const name = String(req.body?.name || '').trim()
+    if (!name) {
+      return res.status(400).json({ error: 'invalid_player_name', message: 'Tên người chơi không hợp lệ.' })
+    }
+
+    const existing = await players.findOne({ name })
+    if (existing) {
+      return res.json({ ok: true, existed: true, player: { id: existing._id, name: existing.name || name } })
+    }
+
+    const id = String(req.body?.id || '').trim() || randomUUID()
+    const player = { _id: id, name }
+
+    await players.insertOne(player)
+
+    res.status(201).json({ ok: true, created: true, player: { id: player._id, name: player.name } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
