@@ -76,8 +76,8 @@ export async function upsertExpenseTypes(types) {
 }
 
 /** Cập nhật tên người chơi */
-export async function updatePlayer(id, newName) {
-  return api('PUT', `/players/${encodeURIComponent(id)}`, { name: newName })
+export async function updatePlayer(id, updates) {
+  return api('PUT', `/players/${encodeURIComponent(id)}`, updates)
 }
 
 /** Xoá một người chơi */

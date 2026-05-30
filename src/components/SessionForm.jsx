@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { PLAYERS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
+import PlayerAvatar from './PlayerAvatar'
 
 function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName, customName, onCustomNameChange }) {
   const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
@@ -96,8 +97,10 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
                 : [...selected, p.id]
               onToggle(next)
             }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            {p.name}
+            <PlayerAvatar player={p} size={24} />
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
           </button>
         ))}
       </div>

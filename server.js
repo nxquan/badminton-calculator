@@ -180,8 +180,11 @@ app.post('/api/sessions', async (req, res) => {
 app.get('/api/players', async (req, res) => {
   try {
     const docs = await players.find({}).sort({ name: 1 }).toArray()
-    // return normalized format: [{ id, name }]
-    res.json(docs.map((doc) => ({ id: doc._id, name: doc.name || String(doc._id) })))
+    res.json(docs.map((doc) => ({
+      id: String(doc._id),
+      name: doc.name || String(doc._id),
+      avatarSource: doc.avatarSource || '',
+    })))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -198,18 +201,23 @@ app.post('/api/players', async (req, res) => {
     if (!name) {
       return res.status(400).json({ error: 'invalid_player_name', message: 'Tên người chơi không hợp lệ.' })
     }
-
     const existing = await players.findOne({ name })
+    const avatarSource = String(req.body?.avatarSource || req.body?.avatar || '').trim()
+
     if (existing) {
-      return res.json({ ok: true, existed: true, player: { id: existing._id, name: existing.name || name } })
+      const nextAvatarSource = avatarSource || existing.avatarSource || ''
+      if (avatarSource || Object.prototype.hasOwnProperty.call(req.body || {}, 'avatarSource') || Object.prototype.hasOwnProperty.call(req.body || {}, 'avatar')) {
+        await players.updateOne({ _id: existing._id }, { $set: { avatarSource: nextAvatarSource } })
+      }
+      return res.json({ ok: true, existed: true, player: { id: existing._id, name: existing.name || name, avatarSource: nextAvatarSource } })
     }
 
     const id = String(req.body?.id || '').trim() || randomUUID()
-    const player = { _id: id, name }
+    const player = { _id: id, name, avatarSource }
 
     await players.insertOne(player)
 
-    res.status(201).json({ ok: true, created: true, player: { id: player._id, name: player.name } })
+    res.status(201).json({ ok: true, created: true, player: { id: player._id, name: player.name, avatarSource: player.avatarSource || '' } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -430,6 +438,8 @@ app.put('/api/players/:id', async (req, res) => {
   try {
     const id = req.params.id
     const { name: newName } = req.body
+    const hasAvatarSource = Object.prototype.hasOwnProperty.call(req.body || {}, 'avatarSource') || Object.prototype.hasOwnProperty.call(req.body || {}, 'avatar')
+    const avatarPayload = hasAvatarSource ? String(req.body?.avatarSource ?? req.body?.avatar ?? '').trim() : null
 
     if (!newName || typeof newName !== 'string') {
       return res.status(400).json({ error: 'Tên mới không hợp lệ' })
@@ -440,16 +450,29 @@ app.put('/api/players/:id', async (req, res) => {
       return res.status(400).json({ error: 'Tên không được để trống' })
     }
 
+    const update = { name: newNameTrimmed }
+    if (hasAvatarSource) {
+      update.avatarSource = avatarPayload || ''
+    }
+
     const result = await players.updateOne(
       { _id: id },
-      { $set: { name: newNameTrimmed } }
+      { $set: update }
     )
 
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: 'Người chơi không tồn tại' })
     }
 
-    res.json({ ok: true })
+    const updated = await players.findOne({ _id: id })
+    res.json({
+      ok: true,
+      player: updated ? {
+        id: updated._id,
+        name: updated.name || newNameTrimmed,
+        avatarSource: updated.avatarSource || '',
+      } : { id, name: newNameTrimmed, avatarSource: update.avatarSource || '' },
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

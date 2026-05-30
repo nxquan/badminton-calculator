@@ -72,9 +72,11 @@ export default function App() {
   // Modal states
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false)
   const [playerInputValue, setPlayerInputValue] = useState('')
+  const [playerAvatarSource, setPlayerAvatarSource] = useState('')
   const [isEditPlayerModalOpen, setIsEditPlayerModalOpen] = useState(false)
   const [editPlayerId, setEditPlayerId] = useState('')
   const [editPlayerNewName, setEditPlayerNewName] = useState('')
+  const [editPlayerAvatarSource, setEditPlayerAvatarSource] = useState('')
   
   const [isAddExpenseTypeModalOpen, setIsAddExpenseTypeModalOpen] = useState(false)
   const [expenseTypeLabel, setExpenseTypeLabel] = useState('')
@@ -92,6 +94,44 @@ export default function App() {
   const getErrorMessage = useCallback((err, fallback) => {
     const message = String(err?.message || err?.error || err || '').trim()
     return message || fallback
+  }, [])
+
+  const verifyImage = useCallback((url, timeout = 5000) => {
+    return new Promise((resolve) => {
+      if (!url) return resolve(false)
+      let settled = false
+      const img = new Image()
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true
+          try { img.src = '' } catch {}
+          resolve(false)
+        }
+      }, timeout)
+      img.onload = () => {
+        if (!settled) {
+          settled = true
+          clearTimeout(timer)
+          resolve(true)
+        }
+      }
+      img.onerror = () => {
+        if (!settled) {
+          settled = true
+          clearTimeout(timer)
+          resolve(false)
+        }
+      }
+      try {
+        img.src = url
+      } catch (e) {
+        if (!settled) {
+          settled = true
+          clearTimeout(timer)
+          resolve(false)
+        }
+      }
+    })
   }, [])
 
   const runToastMutation = useCallback((promise, messages) => {
@@ -153,7 +193,7 @@ export default function App() {
     for (const name of names) {
       if (!name) continue
       if (!players.some((p) => p.name === name)) {
-        toAdd.push({ id: crypto.randomUUID(), name, avatar: '' })
+        toAdd.push({ id: crypto.randomUUID(), name, avatarSource: '' })
       }
     }
     if (toAdd.length === 0) return []
@@ -185,9 +225,19 @@ export default function App() {
       return
     }
 
-    const player = { id: crypto.randomUUID(), name, avatar: '' }
-    setPlayers((prev) => [...prev, player])
+    const avatarTrim = String(playerAvatarSource || '').trim()
+    if (avatarTrim) {
+      const ok = await verifyImage(avatarTrim)
+      if (!ok) {
+        toast.error('Link avatar không hợp lệ hoặc không truy cập được')
+        return
+      }
+    }
+
+    const id = crypto.randomUUID()
+    const player = { id, name, avatarSource: avatarTrim }
     setPlayerInputValue('')
+    setPlayerAvatarSource('')
     setIsAddPlayerModalOpen(false)
 
     if (mongoApi.isConfigured) {
@@ -205,8 +255,10 @@ export default function App() {
       } catch (e) {
         console.error(e)
       }
+    } else {
+      setPlayers((prev) => [...prev, player])
     }
-  }, [playerInputValue, players, runToastMutation])
+  }, [playerAvatarSource, playerInputValue, players, runToastMutation])
 
   const playerNames = useMemo(() => sortPlayerNames(players.map((p) => p.name)), [players])
 
@@ -249,7 +301,7 @@ export default function App() {
         let resolvedPlayers = []
         if (Array.isArray(fetchedPlayersRaw) && fetchedPlayersRaw.length && typeof fetchedPlayersRaw[0] === 'string') {
           // legacy: convert strings to objects with generated ids
-          resolvedPlayers = fetchedPlayersRaw.map((n) => ({ id: crypto.randomUUID(), name: n, avatar: '' }))
+          resolvedPlayers = fetchedPlayersRaw.map((n) => ({ id: crypto.randomUUID(), name: n, avatarSource: '' }))
         } else if (Array.isArray(fetchedPlayersRaw)) {
           resolvedPlayers = fetchedPlayersRaw
         }
@@ -275,7 +327,10 @@ export default function App() {
         // If no players in DB but sessions have names, ensure players exist
         const derived = getSessionPeople(resolvedSessions)
         if (resolvedPlayers.length === 0 && derived.length > 0) {
-          const toCreate = [...new Set(derived)].map((n) => ({ id: crypto.randomUUID(), name: n, avatar: '' }))
+          const toCreate = [...new Set(derived)].map((n) => {
+            const id = crypto.randomUUID()
+            return { id, name: n, avatarSource: '' }
+          })
           setPlayers(toCreate)
         }
 
@@ -488,51 +543,32 @@ export default function App() {
     e.target.value = ''
   }, [normalizeSessionForStorage, runToastMutation, sessions, syncPlayersForNames])
 
-  const handleEditPlayer = useCallback((player, newName) => {
+  const handleEditPlayer = useCallback(async (player, newName, avatarSource) => {
     // player: object { id, name } passed from PlayersPage
     const id = player.id
     const newNameTrim = String(newName || '').trim()
-    if (!newNameTrim || newNameTrim === player.name) return
-    setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, name: newNameTrim } : p)))
+    if (!newNameTrim) return
+    const avatarSourceProvided = avatarSource !== undefined
+    const avatarSourceTrim = avatarSourceProvided ? String(avatarSource || '').trim() : undefined
+    const nextAvatarSource = avatarSourceProvided ? (avatarSourceTrim) : (player.avatarSource || '')
+    if (newNameTrim === player.name && nextAvatarSource === (player.avatarSource || '')) return
 
     // No need to update sessions (they reference ids). Only persist player name change.
     if (mongoApi.isConfigured) {
-      void runToastMutation(
-        mongoApi.updatePlayer(id, { name: newNameTrim }),
+      const result = await runToastMutation(
+        mongoApi.updatePlayer(id, { name: newNameTrim, avatarSource: nextAvatarSource }),
         {
           pending: 'Đang cập nhật người chơi...',
           success: 'Đã cập nhật người chơi',
           error: 'Không thể cập nhật người chơi',
         }
       )
-    }
-  }, [runToastMutation])
-
-  const handleUpdatePlayerAvatar = useCallback(async (player, file) => {
-    if (!player || !file) return
-
-    const avatar = await new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result || ''))
-      reader.onerror = () => reject(reader.error || new Error('Không thể đọc ảnh'))
-      reader.readAsDataURL(file)
-    })
-
-    setPlayers((prev) => prev.map((p) => (p.id === player.id ? { ...p, avatar } : p)))
-
-    if (mongoApi.isConfigured) {
-      try {
-        await runToastMutation(
-          mongoApi.updatePlayer(player.id, { avatar }),
-          {
-            pending: 'Đang tải avatar...',
-            success: 'Đã cập nhật avatar',
-            error: 'Không thể cập nhật avatar',
-          }
-        )
-      } catch (err) {
-        console.error('Update avatar error:', err)
+      const savedPlayer = result?.player
+      if (savedPlayer) {
+        setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...savedPlayer } : p)))
       }
+    } else {
+      setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, name: newNameTrim, avatarSource: nextAvatarSource } : p)))
     }
   }, [runToastMutation])
 
@@ -624,12 +660,15 @@ export default function App() {
     if (!newName) return
     // find player by id
     const player = players.find((p) => p.id === editPlayerId)
-    if (!player || player.name === newName) return
-    handleEditPlayer(player, newName)
+    const nextAvatarSource = editPlayerAvatarSource.trim()
+    if (!player) return
+    if (player.name === newName && (player.avatarSource || '') === nextAvatarSource) return
+    void handleEditPlayer(player, newName, nextAvatarSource)
     setIsEditPlayerModalOpen(false)
     setEditPlayerId('')
     setEditPlayerNewName('')
-  }, [editPlayerId, editPlayerNewName, handleEditPlayer, players])
+    setEditPlayerAvatarSource('')
+  }, [editPlayerAvatarSource, editPlayerId, editPlayerNewName, handleEditPlayer, players])
 
   const handleUpdateExpenseTypeFromModal = useCallback(() => {
     const label = editExpenseTypeLabel.trim()
@@ -755,14 +794,15 @@ export default function App() {
                   playerStats={playerStats}
                 onAddClick={() => {
                   setPlayerInputValue('')
+                  setPlayerAvatarSource('')
                   setIsAddPlayerModalOpen(true)
                 }}
                 onEditClick={(p) => {
                   setEditPlayerId(p.id)
                   setEditPlayerNewName(p.name)
+                  setEditPlayerAvatarSource(p.avatarSource || '')
                   setIsEditPlayerModalOpen(true)
                 }}
-                onAvatarUpload={handleUpdatePlayerAvatar}
                 onDeleteClick={handleDeletePlayer}
               />
             )}
@@ -870,7 +910,7 @@ export default function App() {
           <div className="modal-content">
             <div className="modal-header">
               <h2>Thêm người chơi</h2>
-              <button className="modal-close" onClick={() => setIsAddPlayerModalOpen(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setIsAddPlayerModalOpen(false); setPlayerAvatarSource('') }}>✕</button>
             </div>
             <div className="modal-body">
               <div className="form-group">
@@ -886,10 +926,28 @@ export default function App() {
                   autoFocus
                 />
               </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-outline" onClick={() => setIsAddPlayerModalOpen(false)}>Đóng</button>
-              <button className="btn btn-primary" onClick={() => void handleCreatePlayer()}>Tạo</button>
+              <div className="form-group">
+                <label>Link avatar hoặc profile</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    inputMode="url"
+                    placeholder="Dán link Facebook, Instagram, hoặc link ảnh công khai..."
+                    value={playerAvatarSource}
+                    onChange={(e) => setPlayerAvatarSource(e.target.value)}
+                    style={{ width: '100%', paddingRight: 36 }}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Clear avatar"
+                    className="btn btn-outline"
+                    onClick={() => setPlayerAvatarSource('')}
+                    style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', padding: '4px 8px', border: 'none' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -955,7 +1013,7 @@ export default function App() {
           <div className="modal-content">
             <div className="modal-header">
               <h2>Chỉnh sửa người chơi</h2>
-              <button className="modal-close" onClick={() => setIsEditPlayerModalOpen(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setIsEditPlayerModalOpen(false); setEditPlayerAvatarSource('') }}>✕</button>
             </div>
             <div className="modal-body">
               <div className="form-group">
@@ -971,9 +1029,31 @@ export default function App() {
                   autoFocus
                 />
               </div>
+              <div className="form-group">
+                <label>Link avatar hoặc profile</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    inputMode="url"
+                    placeholder="Dán link Facebook, Instagram, hoặc link ảnh công khai..."
+                    value={editPlayerAvatarSource}
+                    onChange={(e) => setEditPlayerAvatarSource(e.target.value)}
+                    style={{ width: '100%', paddingRight: 36 }}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Clear avatar"
+                    className="btn btn-outline"
+                    onClick={() => setEditPlayerAvatarSource('')}
+                    style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', padding: '4px 8px', border: 'none' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-outline" onClick={() => setIsEditPlayerModalOpen(false)}>Đóng</button>
+              <button className="btn btn-outline" onClick={() => { setIsEditPlayerModalOpen(false); setEditPlayerAvatarSource('') }}>Đóng</button>
               <button className="btn btn-primary" onClick={handleUpdatePlayerFromModal}>Lưu</button>
             </div>
           </div>
