@@ -1,5 +1,55 @@
-import { useMemo, useState, useEffect } from 'react'
+import { Fragment, useMemo, useState, useEffect } from 'react'
 import { formatMoney, calculateTotals, getEntryLabel } from '../constants'
+
+function parseSessionDate(dateValue) {
+  if (!dateValue) return null
+
+  const rawValue = String(dateValue)
+  const normalizedValue = rawValue.length === 10 ? `${rawValue}T00:00:00` : rawValue
+  const parsedDate = new Date(normalizedValue)
+
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
+}
+
+function startOfWeek(date) {
+  const result = new Date(date)
+  const offset = (result.getDay() + 6) % 7
+  result.setDate(result.getDate() - offset)
+  result.setHours(0, 0, 0, 0)
+  return result
+}
+
+function endOfWeek(date) {
+  const result = new Date(date)
+  result.setDate(result.getDate() + 6)
+  result.setHours(23, 59, 59, 999)
+  return result
+}
+
+function formatDateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatDayTitle(date) {
+  const weekday = date.getDay()
+
+  if (weekday === 0) return 'Chủ nhật'
+
+  return `Thứ ${weekday + 1}`
+}
+
+function formatWeekTitle(startDate, endDate) {
+  const formatDate = (date) => date.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+
+  return `Tuần từ ${formatDate(startDate)} đến ${formatDate(endDate)}`
+}
 
 export default function SessionHistory({ sessions, expenseTypes, onView, onDelete }) {
   const [monthFilter, setMonthFilter] = useState(() => {
@@ -32,6 +82,53 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
     })
   }, [sessions, monthFilter])
 
+  const groupedSessions = useMemo(() => {
+    const groups = []
+    let currentWeekGroup = null
+    let currentDayGroup = null
+
+    for (const session of filteredSessions) {
+      const sessionDate = parseSessionDate(session?.date)
+      if (!sessionDate) continue
+
+      const weekStart = startOfWeek(sessionDate)
+      const weekEnd = endOfWeek(weekStart)
+      const weekKey = formatDateKey(weekStart)
+      const dayKey = formatDateKey(sessionDate)
+
+      if (!currentWeekGroup || currentWeekGroup.key !== weekKey) {
+        currentWeekGroup = {
+          key: weekKey,
+          title: formatWeekTitle(weekStart, weekEnd),
+          days: [],
+        }
+        groups.push(currentWeekGroup)
+        currentDayGroup = null
+      }
+
+      if (!currentDayGroup || currentDayGroup.key !== dayKey) {
+        currentDayGroup = {
+          key: dayKey,
+          title: formatDayTitle(sessionDate),
+          sessions: [],
+        }
+        currentWeekGroup.days.push(currentDayGroup)
+      }
+
+      currentDayGroup.sessions.push(session)
+    }
+
+    return groups
+  }, [filteredSessions])
+
+  const monthTotal = useMemo(() => {
+    return filteredSessions.reduce((sum, session) => {
+      const totals = calculateTotals(session.entries)
+      const sessionTotal = Object.values(totals).reduce((sessionSum, value) => sessionSum + value, 0)
+      return sum + sessionTotal
+    }, 0)
+  }, [filteredSessions])
+
   useEffect(() => {
     try {
       localStorage.setItem('sessionHistory.monthFilter', monthFilter)
@@ -53,14 +150,31 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
       ) : (
         <>
           {/* <div className="card-title">📜 Lịch sử ({sessions.length} phiên)</div> */}
-          <div style={{ margin: '8px 16px 12px 16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', flexShrink: 0 }}>Lọc theo tháng</label>
-            <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+          <div style={{ margin: '8px 16px 12px 16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', flexShrink: 0 }}>Lọc theo tháng</label>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              style={{ minWidth: '140px', maxWidth: '180px', padding: '6px 10px', fontSize: '0.85rem' }}
+            >
               <option value="">Tất cả các tháng</option>
               {months.map((m) => (
                 <option key={m} value={m}>{`Tháng ${String(Number(m.slice(5)))} / ${m.slice(0,4)}`}</option>
               ))}
             </select>
+            <div style={{
+              marginLeft: 'auto',
+              padding: '8px 12px',
+              borderRadius: '999px',
+              background: 'linear-gradient(135deg, #ecfeff 0%, #e0f2fe 100%)',
+              border: '1px solid #7dd3fc',
+              fontSize: '0.9rem',
+              fontWeight: 800,
+              color: '#0f4c81',
+              boxShadow: '0 1px 2px rgba(15, 76, 129, 0.12)',
+            }}>
+              Tổng tháng: {formatMoney(Math.round(monthTotal * 1000))}
+            </div>
           </div>
           <div className="table-wrap">
             <table className="result-table history-table">
@@ -76,72 +190,83 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                 </tr>
               </thead>
               <tbody>
-                {filteredSessions.map((session) => {
-                  const totals = calculateTotals(session.entries)
-                  const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
-                  const playerCount = new Set(session.entries.flatMap((e) => e.people.map(p => p.id))).size
-                  const isSpecialSession = session.entries.some((e) => (e.people || []).some((person) => person.name === 'Khánh'))
-                  
-                  // Calculate total hours
-                  const totalHours = session.entries
-                    .filter((e) => e.hours && e.hours > 0)
-                    .reduce((sum, e) => sum + e.hours, 0)
-
-                  const formattedDate = new Date(session.date).toLocaleDateString('vi-VN', {
-                    weekday: 'long',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                  })
-
-                  let details = session.entries
-                    .map((e) => {
-                      const label = getEntryLabel(e, expenseTypes)
-                      return e.note.length > 0 ? label : null
-                    })
-                    .filter(Boolean)
-                  
-                  return (
-                    <tr
-                      key={session.id}
-                      className="history-row"
-                      onClick={() => onView(session)}
-                    >
-                      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formattedDate}</td>
-                      <td>{playerCount}</td>
-                      <td style={{ textAlign: 'center' }}>{totalHours > 0 ? `${totalHours}h` : '-'}</td>
-                      <td style={{ textAlign: 'center', fontWeight: 600, color: isSpecialSession ? 'var(--success)' : 'var(--text-secondary)' }}>
-                        {isSpecialSession ? 'Có' : 'Không'}
-                      </td>
-                      <td>
-                        <div >{details.map((detail) => <div key={detail}>{detail}</div>)}</div>
-                      </td>
-                      <td style={{ 
-                        whiteSpace: 'nowrap', 
-                        fontWeight: 600,
-                        color: grandTotal > 1000 ? '#ef4444' : 'inherit',
-                        borderRadius: grandTotal > 1000 ? '4px' : 'inherit'
-                      }}>
-                        {formatMoney(Math.round(grandTotal * 1000))}
-                      </td>
-                      <td>
-                        {(!session?.settledPlayers || !session?.settledPlayers?.length) && (
-                          <button
-                            className="btn btn-danger-soft btn-sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (window.confirm('Xóa phiên đánh này?')) {
-                                onDelete(session.id)
-                              }
-                            }}
-                          >
-                            <span className="btn-icon" aria-hidden="true">✕</span>
-                          </button>
-                        )}
-                      </td>
+                {groupedSessions.map((weekGroup) => (
+                  <Fragment key={weekGroup.key}>
+                    <tr className="history-group-row history-week-row">
+                      <td colSpan={8} style={{ whiteSpace: 'nowrap', fontWeight: 800, textAlign: 'left' }}>{weekGroup.title}</td>
                     </tr>
-                  )
-                })}
+                    {weekGroup.days.map((dayGroup) => (
+                      <Fragment key={dayGroup.key}>
+                        {dayGroup.sessions.map((session, index) => {
+                          const totals = calculateTotals(session.entries)
+                          const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
+                          const playerCount = new Set(session.entries.flatMap((e) => e.people.map(p => p.id))).size
+                          const isSpecialSession = session.entries.some((e) => (e.people || []).some((person) => person.name === 'Khánh'))
+
+                          const totalHours = session.entries
+                            .filter((e) => e.hours && e.hours > 0)
+                            .reduce((sum, e) => sum + e.hours, 0)
+
+                          const details = session.entries
+                            .map((e) => {
+                              const label = getEntryLabel(e, expenseTypes)
+                              return e.note.length > 0 ? label : null
+                            })
+                            .filter(Boolean)
+
+                          return (
+                            <tr
+                              key={session.id}
+                              className="history-row"
+                              onClick={() => onView(session)}
+                            >
+                              {index === 0 && (
+                                <td
+                                  rowSpan={dayGroup.sessions.length}
+                                  className="history-day-cell"
+                                  style={{ whiteSpace: 'nowrap', fontWeight: 700, verticalAlign: 'middle' }}
+                                >
+                                  {dayGroup.title}
+                                </td>
+                              )}
+                              <td>{playerCount}</td>
+                              <td style={{ textAlign: 'center' }}>{totalHours > 0 ? `${totalHours}h` : '-'}</td>
+                              <td style={{ textAlign: 'center', fontWeight: 600, color: isSpecialSession ? 'var(--success)' : 'var(--text-secondary)' }}>
+                                {isSpecialSession ? 'Có' : 'Không'}
+                              </td>
+                              <td>
+                                <div>{details.map((detail) => <div key={detail}>{detail}</div>)}</div>
+                              </td>
+                              <td style={{
+                                whiteSpace: 'nowrap',
+                                fontWeight: 600,
+                                color: grandTotal > 1000 ? '#ef4444' : 'inherit',
+                                borderRadius: grandTotal > 1000 ? '4px' : 'inherit'
+                              }}>
+                                {formatMoney(Math.round(grandTotal * 1000))}
+                              </td>
+                              <td>
+                                {(!session?.settledPlayers || !session?.settledPlayers?.length) && (
+                                  <button
+                                    className="btn btn-danger-soft btn-sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (window.confirm('Xóa phiên đánh này?')) {
+                                        onDelete(session.id)
+                                      }
+                                    }}
+                                  >
+                                    <span className="btn-icon" aria-hidden="true">✕</span>
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </Fragment>
+                    ))}
+                  </Fragment>
+                ))}
               </tbody>
             </table>
           </div>
