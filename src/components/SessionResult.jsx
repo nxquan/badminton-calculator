@@ -456,7 +456,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 }}
                 disabled={exportingImage}
               >
-                📤 Xuất ảnh
+                📤 Export Bill
               </button>
             </div>
           </div>
