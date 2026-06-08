@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, Fragment } from 'react'
+import html2canvas from 'html2canvas'
 import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
 
 export default function SessionResult({ session, expenseTypes, onBack, onUpdateSession, onEditSession, players = [] }) {
@@ -60,6 +61,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   const [activeResultTab, setActiveResultTab] = useState('entries')
   const [transferTo, setTransferTo] = useState(defaultTransferTo)
   const [settledPlayers, setSettledPlayers] = useState(session.settledPlayers || [])
+  const [exportingImage, setExportingImage] = useState(false)
 
   useEffect(() => {
     setSettledPlayers(session.settledPlayers || [])
@@ -361,9 +363,105 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
       {activeResultTab === 'split' && (
         <div className="card">
-          <div className="card-title">💵 Kết quả chia tiền</div>
+          <div className="card-title" style={{marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            💵 Kết quả chia tiền
+            <div>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={async () => {
+                  const table = document.querySelector('.result-table-split')
+                  if (!table) return
+                  try {
+                    setExportingImage(true)
 
-          <div style={{ marginBottom: '12px' }}>
+                    // Clone table into a temporary wrapper with padding so exported image has 12px padding
+                    const wrapper = document.createElement('div')
+                    wrapper.style.background = '#ffffff'
+                    wrapper.style.padding = '12px'
+                    wrapper.style.display = 'inline-block'
+                    // keep it off-screen to avoid layout shifts
+                    wrapper.style.position = 'absolute'
+                    wrapper.style.left = '-9999px'
+                    wrapper.style.top = '0'
+
+                    const clone = table.cloneNode(true)
+                    // Ensure cloned table fills wrapper width similar to original
+                    clone.style.maxWidth = '100%'
+
+                    // Build header with requested info: Date, participants, total hours, shuttle count, cost
+                    const header = document.createElement('div')
+                    header.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
+                    header.style.color = 'black'
+                    header.style.marginBottom = '8px'
+                    header.style.display = 'flex'
+                    header.style.flexDirection = 'column'
+                    header.style.gap = '4px'
+
+                    const hTitle = document.createElement('div')
+                    hTitle.style.fontWeight = '700'
+                    hTitle.style.fontSize = '16px'
+                    hTitle.textContent = `Phiên: ${formattedDate}`
+                    header.appendChild(hTitle)
+
+                    const infoLine = document.createElement('div')
+                    infoLine.style.display = 'flex'
+                    infoLine.style.gap = '16px'
+                    infoLine.style.alignItems = 'center'
+
+                    const participantsCount = document.createElement('div')
+                    participantsCount.textContent = `Số người tham gia: ${participants.length}`
+                    infoLine.appendChild(participantsCount)
+
+                    // total hours (sum of entry.hours)
+                    const totalHours = (normalizedEntries || []).reduce((s, e) => s + (Number(e.hours) || 0), 0)
+                    const hoursEl = document.createElement('div')
+                    hoursEl.textContent = `Số giờ chơi: ${totalHours || '-'} `
+                    infoLine.appendChild(hoursEl)
+
+                    
+
+                    // cost
+                    const costEl = document.createElement('div')
+                    costEl.textContent = `Chi phí: ${formatMoney(Math.round(grandTotal * 1000))}`
+                    infoLine.appendChild(costEl)
+
+                    header.appendChild(infoLine)
+
+                    wrapper.appendChild(header)
+                    wrapper.appendChild(clone)
+                    document.body.appendChild(wrapper)
+
+                    const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: null })
+                    canvas.toBlob((blob) => {
+                      try {
+                        if (!blob) return
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        const dateStr = (session.date || new Date().toISOString().split('T')[0])
+                        a.download = `badminton-result-${dateStr}.png`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      } finally {
+                        setExportingImage(false)
+                        // clean up temporary wrapper
+                        try { document.body.removeChild(wrapper) } catch (e) { /* ignore */ }
+                      }
+                    })
+                  } catch (e) {
+                    setExportingImage(false)
+                    console.error('Export image error', e)
+                  }
+                }}
+                disabled={exportingImage}
+              >
+                📤 Xuất ảnh
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '4px' }}>
             <label
               style={{
                 fontSize: '0.8rem',
@@ -396,9 +494,10 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               ))}
             </div>
             
+            
           </div>
 
-          <table className="result-table">
+          <table className="result-table result-table-split">
             <thead>
               <tr>
                 <th>Người chơi</th>
@@ -426,7 +525,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
                   return (
                     <tr key={name} className={name === transferTo ? 'transfer-target-row' : ''}>
-                      <td>
+                      <td style={{ fontWeight: 600, color: 'var(--color-accent-dark)' }}>
                         {name}{' '}
                         {paid > 0 ? (
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
@@ -434,11 +533,11 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                           </span>
                         ) : null}
                       </td>
-                      <td>{formatMoney(Math.round(amount * 1000))}</td>
+                      <td style={{color: 'red', fontWeight: 600}}>{formatMoney(Math.round(amount * 1000))}</td>
                       {allExpenseTypes.map((type) => {
                         const typeAmount = expenseTypeBreakdown[type.value]?.[name] || 0
                         return (
-                          <td key={type.value} style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                          <td key={type.value} style={{ fontSize: '1rem', fontWeight: 500 }}>
                             {typeAmount > 0 ? formatMoney(Math.round(typeAmount * 1000)) : '-'}
                           </td>
                         )

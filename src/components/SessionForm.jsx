@@ -449,6 +449,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
       type,
       amount: numAmount,
       hours: type === 'san' ? numHours : undefined,
+      
       note: note.trim(),
       payer,
       people: [...people],
@@ -500,17 +501,20 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
           />
         </div>
         {type === 'san' && (
-          <div className="form-group" style={{ flex: '0 0 auto', minWidth: '120px' }}>
-            <label>Số giờ</label>
-            <input
-              type="number"
-              min="0.5"
-              step="0.5"
-              placeholder="VD: 2"
-              value={hours ?? 2}
-              onChange={(e) => setHours(e.target.value)}
-            />
-          </div>
+          <>
+            <div className="form-group" style={{ flex: '0 0 auto', minWidth: '120px' }}>
+              <label>Số giờ</label>
+              <input
+                type="number"
+                min="0.5"
+                step="0.5"
+                placeholder="VD: 2"
+                value={hours ?? 2}
+                onChange={(e) => setHours(e.target.value)}
+              />
+            </div>
+        
+          </>
         )}
         <div className="form-group" style={{ flex: '1 1 auto', minWidth: '140px' }}>
           <label>Ghi chú (tuỳ chọn)</label>
@@ -595,6 +599,7 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
       type,
       amount: numAmount,
       hours: type === 'san' ? numHours : undefined,
+      
       note: note.trim(),
       payer,
       people: [...people],
@@ -611,7 +616,6 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
             expenseTypes={sortedTypes}
             onSelect={(newType) => {
             setType(newType)
-            
             // Reset people if type is not one of the main types
             if (!['san', 'cau', 'tra-da'].includes(newType)) {
               setPeople([])

@@ -66,6 +66,7 @@ export default function App() {
   const [viewingSession, setViewingSession] = useState(null)
   const [activeTab, setActiveTab] = useState('history')
   const [sidebarView, setSidebarView] = useState({ view: 'sessions', session: null })
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [dbStatus, setDbStatus] = useState(mongoApi.isConfigured ? 'loading' : 'offline')
   const importRef = useRef(null)
 
@@ -748,6 +749,14 @@ export default function App() {
             <h1> Tính tiền cầu lông</h1>
             <p>Chia tiền sân, cầu, trà đá, cơm</p>
           </div>
+          <button
+            className="hamburger btn btn-outline"
+            aria-label="Toggle menu"
+            onClick={() => setIsSidebarOpen((v) => !v)}
+            style={{ display: 'none' }}
+          >
+            ☰
+          </button>
           <a href="https://github.com/nxquan/badminton-calculator" target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
             🐙 Contribution
           </a>
@@ -757,7 +766,8 @@ export default function App() {
 
       <div className="app-layout" style={{ display: 'flex', gap: 16 }}>
         <Sidebar
-          onSelectMenu={(view) => setSidebarView({ view, session: null })}
+          className={isSidebarOpen ? 'mobile-open' : 'collapsed'}
+          onSelectMenu={(view) => { setSidebarView({ view, session: null }); setIsSidebarOpen(false) }}
         />
 
           <div className="app-content" style={{ flex: 1 }}>

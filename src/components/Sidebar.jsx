@@ -1,8 +1,8 @@
 import React from 'react'
 
-export default function Sidebar({ onSelectMenu }) {
+export default function Sidebar({ onSelectMenu, className = '' }) {
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${className}`}>
       <div className="sidebar-section">
         <button
           className="sidebar-menu-btn"
