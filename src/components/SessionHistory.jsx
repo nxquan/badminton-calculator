@@ -41,14 +41,25 @@ function formatDayTitle(date) {
   return `Thứ ${weekday + 1}`
 }
 
-function formatWeekTitle(startDate, endDate) {
-  const formatDate = (date) => date.toLocaleDateString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+function formatWeekTitle(weekNumber, startDate, endDate) {
+  const formatDate = (date, includeYear = true) => {
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
 
-  return `Tuần từ ${formatDate(startDate)} đến ${formatDate(endDate)}`
+    return includeYear ? `${day}/${month}/${year}` : `${day}/${month}`
+  }
+  const sameMonth = startDate.getFullYear() === endDate.getFullYear() && startDate.getMonth() === endDate.getMonth()
+
+  return {
+    weekNumber,
+    label: `Tuần ${weekNumber}`,
+    range: `(${formatDate(startDate, !sameMonth)} - ${formatDate(endDate)})`,
+  }
+}
+
+function getMonthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 export default function SessionHistory({ sessions, expenseTypes, onView, onDelete }) {
@@ -95,11 +106,15 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
       const weekEnd = endOfWeek(weekStart)
       const weekKey = formatDateKey(weekStart)
       const dayKey = formatDateKey(sessionDate)
+      const monthKey = getMonthKey(sessionDate)
 
       if (!currentWeekGroup || currentWeekGroup.key !== weekKey) {
         currentWeekGroup = {
           key: weekKey,
-          title: formatWeekTitle(weekStart, weekEnd),
+          monthKey,
+          weekStart,
+          weekEnd,
+          title: null,
           days: [],
         }
         groups.push(currentWeekGroup)
@@ -116,6 +131,21 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
       }
 
       currentDayGroup.sessions.push(session)
+    }
+
+    const monthGroups = new Map()
+    for (const group of groups) {
+      if (!monthGroups.has(group.monthKey)) {
+        monthGroups.set(group.monthKey, [])
+      }
+      monthGroups.get(group.monthKey).push(group)
+    }
+
+    for (const groupList of monthGroups.values()) {
+      groupList.sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
+      groupList.forEach((group, index) => {
+        group.title = formatWeekTitle(index + 1, group.weekStart, group.weekEnd)
+      })
     }
 
     return groups
@@ -193,7 +223,25 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                 {groupedSessions.map((weekGroup) => (
                   <Fragment key={weekGroup.key}>
                     <tr className="history-group-row history-week-row">
-                      <td colSpan={8} style={{ whiteSpace: 'nowrap', fontWeight: 800, textAlign: 'left' }}>{weekGroup.title}</td>
+                      <td colSpan={8} style={{ whiteSpace: 'nowrap', fontWeight: 800, textAlign: 'left' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: '30px',
+                            padding: '2px 8px',
+                            marginRight: '8px',
+                            borderRadius: '999px',
+                            background: 'linear-gradient(135deg, #fde68a 0%, #f59e0b 100%)',
+                            color: '#7c2d12',
+                            boxShadow: '0 1px 2px rgba(124, 45, 18, 0.18)',
+                          }}
+                        >
+                          {weekGroup.title.label}
+                        </span>
+                        <span>{weekGroup.title.range}</span>
+                      </td>
                     </tr>
                     {weekGroup.days.map((dayGroup) => (
                       <Fragment key={dayGroup.key}>
