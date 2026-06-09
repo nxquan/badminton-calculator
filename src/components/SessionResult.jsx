@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import html2canvas from 'html2canvas'
 import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
+import paymentQrImage from '../files/qr-code.jpeg'
 
 export default function SessionResult({ session, expenseTypes, onBack, onUpdateSession, onEditSession, players = [] }) {
   const idToName = Object.fromEntries((players || []).map((p) => [p.id, p.name]))
@@ -389,6 +390,52 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                     // Ensure cloned table fills wrapper width similar to original
                     clone.style.maxWidth = '100%'
 
+                    const paymentBlock = document.createElement('div')
+                    paymentBlock.style.marginTop = '16px'
+                    paymentBlock.style.display = 'flex'
+                    paymentBlock.style.flexDirection = 'column'
+                    paymentBlock.style.alignItems = 'center'
+                    paymentBlock.style.gap = '8px'
+                    paymentBlock.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
+                    paymentBlock.style.color = 'black'
+
+                    const paymentTitle = document.createElement('div')
+                    paymentTitle.style.fontWeight = '700'
+                    paymentTitle.style.fontSize = '15px'
+                    paymentTitle.textContent = 'Thanh toán qua QR'
+                    paymentBlock.appendChild(paymentTitle)
+
+                    const paymentCaption = document.createElement('div')
+                    paymentCaption.style.fontSize = '13px'
+                    paymentCaption.style.opacity = '0.85'
+                    paymentCaption.style.textAlign = 'center'
+                    paymentCaption.textContent = 'Quét mã QR bên dưới để chuyển khoản'
+                    paymentBlock.appendChild(paymentCaption)
+
+                    const paymentQrWrapper = document.createElement('div')
+                    paymentQrWrapper.style.background = '#fff'
+                    paymentQrWrapper.style.borderRadius = '16px'
+                    paymentQrWrapper.style.padding = '14px'
+                    paymentQrWrapper.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
+                    paymentQrWrapper.style.display = 'flex'
+                    paymentQrWrapper.style.alignItems = 'center'
+                    paymentQrWrapper.style.justifyContent = 'center'
+
+                    const paymentQr = document.createElement('img')
+                    paymentQr.alt = 'QR thanh toán'
+                    paymentQr.src = paymentQrImage
+                    paymentQr.style.width = '240px'
+                    paymentQr.style.maxWidth = '100%'
+                    paymentQr.style.display = 'block'
+
+                    await new Promise((resolve, reject) => {
+                      paymentQr.onload = resolve
+                      paymentQr.onerror = reject
+                    })
+
+                    paymentQrWrapper.appendChild(paymentQr)
+                    paymentBlock.appendChild(paymentQrWrapper)
+
                     // Build header with requested info: Date, participants, total hours, shuttle count, cost
                     const header = document.createElement('div')
                     header.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
@@ -430,6 +477,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
                     wrapper.appendChild(header)
                     wrapper.appendChild(clone)
+                    wrapper.appendChild(paymentBlock)
                     document.body.appendChild(wrapper)
 
                     const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: null })
