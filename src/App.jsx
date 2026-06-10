@@ -212,9 +212,36 @@ export default function App() {
     })
   }, [players])
 
-  const handleAddPlayerName = useCallback((name) => {
-    syncPlayersForNames([name])
-  }, [syncPlayersForNames])
+  const handleAddPlayerName = useCallback(async (name) => {
+    const trimmed = String(name || '').trim()
+    if (!trimmed) return null
+
+    const existing = players.find((player) => player.name.trim().toLowerCase() === trimmed.toLowerCase())
+    if (existing) return existing.id
+
+    const player = { id: crypto.randomUUID(), name: trimmed, avatarSource: '' }
+
+    if (mongoApi.isConfigured) {
+      try {
+        await runToastMutation(
+          mongoApi.createPlayer(player),
+          {
+            pending: 'Đang tạo người chơi...',
+            success: 'Đã tạo người chơi',
+            error: 'Không thể tạo người chơi',
+          }
+        )
+        setPlayers((prev) => (prev.some((item) => item.id === player.id || item.name.trim().toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, player]))
+        return player.id
+      } catch (error) {
+        console.error(error)
+        return null
+      }
+    }
+
+    setPlayers((prev) => (prev.some((item) => item.id === player.id || item.name.trim().toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, player]))
+    return player.id
+  }, [players, runToastMutation])
 
   const handleCreatePlayer = useCallback(async () => {
     const name = playerInputValue.trim()

@@ -5,6 +5,9 @@ import PlayerAvatar from './PlayerAvatar'
 
 function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName, customName, onCustomNameChange }) {
   const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
+  const [isNameDropdownOpen, setIsNameDropdownOpen] = useState(false)
+  const [highlightedNameIndex, setHighlightedNameIndex] = useState(0)
+  const customInputRef = useRef(null)
   const displayPlayers = useMemo(() => {
     const ids = new Set(sortedPlayers.map((p) => p.id))
     // include selected ids that may not be in players list
@@ -27,6 +30,82 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
   }, [combos, players])
 
   const allSelected = sortedPlayers.length > 0 && sortedPlayers.every((p) => selected.includes(p.id))
+  const customQuery = String(customName || '').trim()
+  const customQueryLower = customQuery.toLowerCase()
+
+  const matchingPlayers = useMemo(() => {
+    if (!customQuery) return sortedPlayers
+    return sortedPlayers.filter((player) => {
+      const haystack = `${player.name || ''} ${player.id || ''}`.toLowerCase()
+      return haystack.includes(customQueryLower)
+    })
+  }, [customQuery, customQueryLower, sortedPlayers])
+
+  const exactMatchedPlayer = useMemo(() => {
+    if (!customQuery) return null
+    return sortedPlayers.find((player) => player.name.trim().toLowerCase() === customQueryLower) || null
+  }, [customQuery, customQueryLower, sortedPlayers])
+
+  useEffect(() => {
+    setHighlightedNameIndex(0)
+  }, [customQuery, isNameDropdownOpen])
+
+  const selectPlayerId = useCallback((playerId) => {
+    if (!playerId) return
+    const next = selected.includes(playerId)
+      ? selected.filter((id) => id !== playerId)
+      : [...selected, playerId]
+    onToggle(next)
+  }, [onToggle, selected])
+
+  const addOrSelectCustomName = useCallback(async (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return
+
+    const existing = sortedPlayers.find((player) => player.name.trim().toLowerCase() === raw.toLowerCase())
+    const resolvedId = existing?.id || (await Promise.resolve(onAddName?.(raw)))
+    const playerId = typeof resolvedId === 'object' && resolvedId ? resolvedId.id : resolvedId
+
+    if (!playerId) return
+
+    const next = selected.includes(playerId) ? selected : [...selected, playerId]
+    onToggle(next)
+    onCustomNameChange?.('')
+    setIsNameDropdownOpen(false)
+    setHighlightedNameIndex(0)
+    customInputRef.current?.focus()
+  }, [onAddName, onCustomNameChange, onToggle, selected, sortedPlayers])
+
+  const handleNameKeyDown = async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (matchingPlayers.length > 0) {
+        const chosen = matchingPlayers[highlightedNameIndex] || matchingPlayers[0]
+        if (chosen) {
+          selectPlayerId(chosen.id)
+          onCustomNameChange?.('')
+          setIsNameDropdownOpen(false)
+          setHighlightedNameIndex(0)
+        }
+        return
+      }
+      await addOrSelectCustomName(customQuery)
+      return
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setIsNameDropdownOpen(true)
+      setHighlightedNameIndex((index) => Math.min(index + 1, Math.max(matchingPlayers.length - 1, 0)))
+      return
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setIsNameDropdownOpen(true)
+      setHighlightedNameIndex((index) => Math.max(index - 1, 0))
+    }
+  }
 
   const resolveMemberId = (value) => {
     const raw = String(value || '').trim()
@@ -53,6 +132,103 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
 
   return (
     <div>
+      <div className="form-group" style={{ marginBottom: '10px', position: 'relative' }}>
+        <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+          <label>Thêm người chơi:</label>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              ref={customInputRef}
+              type="text"
+              value={customName}
+              placeholder="Nhập tên để thêm hoặc tìm nhanh..."
+              onChange={(e) => {
+                onCustomNameChange?.(e.target.value)
+                setIsNameDropdownOpen(true)
+              }}
+              onClick={() => setIsNameDropdownOpen(true)}
+              onFocus={() => setIsNameDropdownOpen(true)}
+              onKeyDown={handleNameKeyDown}
+              onBlur={() => setTimeout(() => setIsNameDropdownOpen(false), 120)}
+              style={{ paddingRight: '92px' }}
+            />
+          </div>
+        </div>
+
+        {isNameDropdownOpen && (customQuery || matchingPlayers.length > 0) && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 'calc(100% + 4px)',
+              zIndex: 30,
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              boxShadow: 'var(--shadow-lg)',
+              maxHeight: '240px',
+              overflow: 'auto',
+            }}
+          >
+            {(customQuery ? matchingPlayers.slice(0, 8) : matchingPlayers).map((player, index) => (
+              <button
+                key={player.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  selectPlayerId(player.id)
+                  onCustomNameChange?.('')
+                  setIsNameDropdownOpen(false)
+                  setHighlightedNameIndex(0)
+                }}
+                onMouseEnter={() => setHighlightedNameIndex(index)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 10px',
+                  border: 'none',
+                  background: highlightedNameIndex === index ? 'rgba(255, 147, 46, 0.12)' : 'transparent',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>👤</span>
+                <span>{player.name}</span>
+                {selected.includes(player.id) && (
+                  <span style={{ marginLeft: 'auto', color: 'var(--success)', fontSize: 12, fontWeight: 700 }}>✓</span>
+                )}
+              </button>
+            ))}
+
+            {customQuery && !exactMatchedPlayer && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => addOrSelectCustomName(customQuery)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 10px',
+                  border: 'none',
+                  borderTop: '1px solid var(--border)',
+                  background: 'transparent',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>＋</span>
+                <span>Thêm "{customQuery}"</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="select-actions">
         {(sortedCombos || []).map((combo) => (
           <button
@@ -74,6 +250,15 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
         >
           {allSelected ? 'Bỏ tất cả' : 'Tất cả'}
         </button>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => onToggle([])}
+          disabled={selected.length === 0}
+          style={{ opacity: selected.length === 0 ? 0.5 : 1 }}
+        >
+          Clear
+        </button>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', alignSelf: 'center' }}>
           {selected.length} người
         </span>
@@ -92,10 +277,7 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
             type="button"
             className={`people-chip ${selected.includes(p.id) ? 'selected' : ''}`}
             onClick={() => {
-              const next = selected.includes(p.id)
-                ? selected.filter((n) => n !== p.id)
-                : [...selected, p.id]
-              onToggle(next)
+              selectPlayerId(p.id)
             }}
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
@@ -193,6 +375,7 @@ function ExpenseTypePicker({ value, expenseTypes = [], onSelect }) {
           setOpen(true)
         }}
         onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         style={{ paddingLeft: selectedType ? '38px' : undefined, paddingRight: '34px' }}
@@ -436,6 +619,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
   const [note, setNote] = useState('')
   const [people, setPeople] = useState(lastPeople)
   const [payer, setPayer] = useState(lastPayer)
+  const [customName, setCustomName] = useState('')
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -459,6 +643,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
     setAmount(type === 'san' ? 240 : '')
     setNote('')
     setPayer(lastPayer)
+    setCustomName('')
     setPeople(['san', 'cau', 'tra-da'].includes(type) ? people : [])
   }
 
@@ -545,8 +730,8 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
           players={players}
           combos={combos}
           onAddName={onAddName}
-          customName=""
-          onCustomNameChange={() => {}}
+          customName={customName}
+          onCustomNameChange={setCustomName}
         />
       </div>
 
