@@ -63,6 +63,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   const [transferTo, setTransferTo] = useState(defaultTransferTo)
   const [settledPlayers, setSettledPlayers] = useState(session.settledPlayers || [])
   const [exportingImage, setExportingImage] = useState(false)
+  const [copyingImage, setCopyingImage] = useState(false)
 
   useEffect(() => {
     setSettledPlayers(session.settledPlayers || [])
@@ -137,6 +138,126 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     month: 'long',
     day: 'numeric',
   })
+
+  const generateBillImage = async () => {
+    const table = document.querySelector('.result-table-split')
+    if (!table) throw new Error('Table not found')
+
+    // Clone table into a temporary wrapper with padding
+    const wrapper = document.createElement('div')
+    wrapper.style.background = '#ffffff'
+    wrapper.style.padding = '12px'
+    wrapper.style.paddingTop = '32px'
+    wrapper.style.display = 'inline-block'
+    wrapper.style.position = 'absolute'
+    wrapper.style.left = '-9999px'
+    wrapper.style.top = '0'
+
+    const clone = table.cloneNode(true)
+    clone.style.maxWidth = '100%'
+
+    // Build payment block
+    const paymentBlock = document.createElement('div')
+    paymentBlock.style.marginTop = '16px'
+    paymentBlock.style.display = 'flex'
+    paymentBlock.style.flexDirection = 'column'
+    paymentBlock.style.alignItems = 'center'
+    paymentBlock.style.gap = '8px'
+    paymentBlock.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
+    paymentBlock.style.color = 'black'
+
+    const paymentTitle = document.createElement('div')
+    paymentTitle.style.fontWeight = '700'
+    paymentTitle.style.fontSize = '15px'
+    paymentTitle.textContent = 'Thanh toán qua QR'
+    paymentBlock.appendChild(paymentTitle)
+
+    const paymentCaption = document.createElement('div')
+    paymentCaption.style.fontSize = '13px'
+    paymentCaption.style.opacity = '0.85'
+    paymentCaption.style.textAlign = 'center'
+    paymentCaption.textContent = 'Quét mã QR bên dưới để chuyển khoản'
+    paymentBlock.appendChild(paymentCaption)
+
+    const paymentQrWrapper = document.createElement('div')
+    paymentQrWrapper.style.background = '#fff'
+    paymentQrWrapper.style.borderRadius = '16px'
+    paymentQrWrapper.style.padding = '14px'
+    paymentQrWrapper.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
+    paymentQrWrapper.style.display = 'flex'
+    paymentQrWrapper.style.alignItems = 'center'
+    paymentQrWrapper.style.justifyContent = 'center'
+
+    const paymentQr = document.createElement('img')
+    paymentQr.alt = 'QR thanh toán'
+    paymentQr.src = paymentQrImage
+    paymentQr.style.width = '240px'
+    paymentQr.style.maxWidth = '100%'
+    paymentQr.style.display = 'block'
+
+    await new Promise((resolve, reject) => {
+      paymentQr.onload = resolve
+      paymentQr.onerror = reject
+    })
+
+    paymentQrWrapper.appendChild(paymentQr)
+    paymentBlock.appendChild(paymentQrWrapper)
+
+    // Build header
+    const header = document.createElement('div')
+    header.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
+    header.style.color = 'black'
+    header.style.marginBottom = '8px'
+    header.style.display = 'flex'
+    header.style.flexDirection = 'column'
+    header.style.gap = '4px'
+
+    const hTitle = document.createElement('div')
+    hTitle.style.fontWeight = '700'
+    hTitle.style.fontSize = '16px'
+    hTitle.textContent = `Phiên: ${formattedDate}`
+    header.appendChild(hTitle)
+
+    const infoLine = document.createElement('div')
+    infoLine.style.display = 'flex'
+    infoLine.style.gap = '16px'
+    infoLine.style.alignItems = 'center'
+
+    const participantsCount = document.createElement('div')
+    participantsCount.textContent = `Số người tham gia: ${participants.length}`
+    infoLine.appendChild(participantsCount)
+
+    const totalHours = (normalizedEntries || []).reduce((s, e) => s + (Number(e.hours) || 0), 0)
+    const hoursEl = document.createElement('div')
+    hoursEl.textContent = `Số giờ chơi: ${totalHours || '-'} `
+    infoLine.appendChild(hoursEl)
+
+    const costEl = document.createElement('div')
+    costEl.textContent = `Chi phí: ${formatMoney(Math.round(grandTotal * 1000))}`
+    infoLine.appendChild(costEl)
+
+    header.appendChild(infoLine)
+
+    wrapper.appendChild(header)
+    wrapper.appendChild(clone)
+    wrapper.appendChild(paymentBlock)
+    document.body.appendChild(wrapper)
+
+    try {
+      const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: null })
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob)
+          } else {
+            reject(new Error('Failed to create blob'))
+          }
+        })
+      })
+    } finally {
+      try { document.body.removeChild(wrapper) } catch (e) { /* ignore */ }
+    }
+  }
 
   const sortedEntries = useMemo(() => {
     const orderMap = sortExpenseTypes(expenseTypes || []).reduce((m, t, i) => {
@@ -371,140 +492,45 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 type="button"
                 className="btn btn-outline"
                 onClick={async () => {
-                  const table = document.querySelector('.result-table-split')
-                  if (!table) return
                   try {
                     setExportingImage(true)
-
-                    // Clone table into a temporary wrapper with padding so exported image has 12px padding
-                    const wrapper = document.createElement('div')
-                    wrapper.style.background = '#ffffff'
-                    wrapper.style.padding = '12px'
-                    wrapper.style.display = 'inline-block'
-                    // keep it off-screen to avoid layout shifts
-                    wrapper.style.position = 'absolute'
-                    wrapper.style.left = '-9999px'
-                    wrapper.style.top = '0'
-
-                    const clone = table.cloneNode(true)
-                    // Ensure cloned table fills wrapper width similar to original
-                    clone.style.maxWidth = '100%'
-
-                    const paymentBlock = document.createElement('div')
-                    paymentBlock.style.marginTop = '16px'
-                    paymentBlock.style.display = 'flex'
-                    paymentBlock.style.flexDirection = 'column'
-                    paymentBlock.style.alignItems = 'center'
-                    paymentBlock.style.gap = '8px'
-                    paymentBlock.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
-                    paymentBlock.style.color = 'black'
-
-                    const paymentTitle = document.createElement('div')
-                    paymentTitle.style.fontWeight = '700'
-                    paymentTitle.style.fontSize = '15px'
-                    paymentTitle.textContent = 'Thanh toán qua QR'
-                    paymentBlock.appendChild(paymentTitle)
-
-                    const paymentCaption = document.createElement('div')
-                    paymentCaption.style.fontSize = '13px'
-                    paymentCaption.style.opacity = '0.85'
-                    paymentCaption.style.textAlign = 'center'
-                    paymentCaption.textContent = 'Quét mã QR bên dưới để chuyển khoản'
-                    paymentBlock.appendChild(paymentCaption)
-
-                    const paymentQrWrapper = document.createElement('div')
-                    paymentQrWrapper.style.background = '#fff'
-                    paymentQrWrapper.style.borderRadius = '16px'
-                    paymentQrWrapper.style.padding = '14px'
-                    paymentQrWrapper.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
-                    paymentQrWrapper.style.display = 'flex'
-                    paymentQrWrapper.style.alignItems = 'center'
-                    paymentQrWrapper.style.justifyContent = 'center'
-
-                    const paymentQr = document.createElement('img')
-                    paymentQr.alt = 'QR thanh toán'
-                    paymentQr.src = paymentQrImage
-                    paymentQr.style.width = '240px'
-                    paymentQr.style.maxWidth = '100%'
-                    paymentQr.style.display = 'block'
-
-                    await new Promise((resolve, reject) => {
-                      paymentQr.onload = resolve
-                      paymentQr.onerror = reject
-                    })
-
-                    paymentQrWrapper.appendChild(paymentQr)
-                    paymentBlock.appendChild(paymentQrWrapper)
-
-                    // Build header with requested info: Date, participants, total hours, shuttle count, cost
-                    const header = document.createElement('div')
-                    header.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
-                    header.style.color = 'black'
-                    header.style.marginBottom = '8px'
-                    header.style.display = 'flex'
-                    header.style.flexDirection = 'column'
-                    header.style.gap = '4px'
-
-                    const hTitle = document.createElement('div')
-                    hTitle.style.fontWeight = '700'
-                    hTitle.style.fontSize = '16px'
-                    hTitle.textContent = `Phiên: ${formattedDate}`
-                    header.appendChild(hTitle)
-
-                    const infoLine = document.createElement('div')
-                    infoLine.style.display = 'flex'
-                    infoLine.style.gap = '16px'
-                    infoLine.style.alignItems = 'center'
-
-                    const participantsCount = document.createElement('div')
-                    participantsCount.textContent = `Số người tham gia: ${participants.length}`
-                    infoLine.appendChild(participantsCount)
-
-                    // total hours (sum of entry.hours)
-                    const totalHours = (normalizedEntries || []).reduce((s, e) => s + (Number(e.hours) || 0), 0)
-                    const hoursEl = document.createElement('div')
-                    hoursEl.textContent = `Số giờ chơi: ${totalHours || '-'} `
-                    infoLine.appendChild(hoursEl)
-
-                    
-
-                    // cost
-                    const costEl = document.createElement('div')
-                    costEl.textContent = `Chi phí: ${formatMoney(Math.round(grandTotal * 1000))}`
-                    infoLine.appendChild(costEl)
-
-                    header.appendChild(infoLine)
-
-                    wrapper.appendChild(header)
-                    wrapper.appendChild(clone)
-                    wrapper.appendChild(paymentBlock)
-                    document.body.appendChild(wrapper)
-
-                    const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: null })
-                    canvas.toBlob((blob) => {
-                      try {
-                        if (!blob) return
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        const dateStr = (session.date || new Date().toISOString().split('T')[0])
-                        a.download = `badminton-result-${dateStr}.png`
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      } finally {
-                        setExportingImage(false)
-                        // clean up temporary wrapper
-                        try { document.body.removeChild(wrapper) } catch (e) { /* ignore */ }
-                      }
-                    })
+                    const blob = await generateBillImage()
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    const dateStr = (session.date || new Date().toISOString().split('T')[0])
+                    a.download = `badminton-result-${dateStr}.png`
+                    a.click()
+                    URL.revokeObjectURL(url)
                   } catch (e) {
-                    setExportingImage(false)
                     console.error('Export image error', e)
+                  } finally {
+                    setExportingImage(false)
                   }
                 }}
                 disabled={exportingImage}
               >
                 📤 Export Bill
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={async () => {
+                  try {
+                    setCopyingImage(true)
+                    const blob = await generateBillImage()
+                    const item = new ClipboardItem({ 'image/png': blob })
+                    await navigator.clipboard.write([item])
+                  } catch (e) {
+                    console.error('Copy to clipboard error', e)
+                  } finally {
+                    setCopyingImage(false)
+                  }
+                }}
+                disabled={copyingImage}
+                style={{ marginLeft: '8px' }}
+              >
+                📋 Copy Bill
               </button>
             </div>
           </div>
@@ -555,7 +581,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                     {type.emoji} {type.label}
                   </th>
                 ))}
-                {transferTo && <th>Chuyển cho {transferTo}</th>}
+                {transferTo && <th style = {{color: 'var(--color-accent)'}}>Chuyển cho {transferTo}</th>}
                 <th>Trạng thái</th>
                 <th>Đánh dấu</th>
               </tr>
