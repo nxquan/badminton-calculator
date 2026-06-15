@@ -15,8 +15,6 @@ import StatsPage from './pages/StatsPage'
 import EmptyPage from './pages/EmptyPage'
 import ComboConfigPage from './pages/ComboConfigPage'
 
-const STORAGE_KEY = 'badminton-sessions'
-
 const EXPENSE_EMOJI_CATEGORIES = [
   {
     label: '🍕 Thức ăn & đồ uống',
@@ -44,21 +42,8 @@ const EXPENSE_EMOJI_CATEGORIES = [
   }
 ]
 
-function loadSessions() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function saveSessions(sessions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
-}
-
 export default function App() {
-  const [sessions, setSessions] = useState(loadSessions)
+  const [sessions, setSessions] = useState([])
   const [players, setPlayers] = useState([]) // array of { id, name }
   const [expenseTypes, setExpenseTypes] = useState(DEFAULT_EXPENSE_TYPES)
   const [combos, setCombos] = useState(() => loadCombos())
@@ -322,7 +307,6 @@ export default function App() {
         if (typesResult.status === 'rejected') toast.error(getErrorMessage(typesResult.reason, 'Không thể tải danh sách loại kinh phí'))
         if (combosResult.status === 'rejected') toast.error(getErrorMessage(combosResult.reason, 'Không thể tải danh sách combo'))
 
-        const localSessions = loadSessions()
         const docs = sessionsResult.status === 'fulfilled' ? sessionsResult.value : []
         const fetchedPlayersRaw = playersResult.status === 'fulfilled' ? playersResult.value : []
         // players: API returns array of { id, name } or legacy array of strings
@@ -335,22 +319,9 @@ export default function App() {
         }
         setPlayers(resolvedPlayers)
         const types = typesResult.status === 'fulfilled' ? typesResult.value : []
-        const resolvedSessionsRaw = docs.length > 0 ? docs : localSessions
-        const resolvedSessions = resolvedSessionsRaw.map((s) => normalizeSessionForStorage(s, resolvedPlayers))
-
-        if (sessionsResult.status === 'fulfilled' && docs.length === 0 && localSessions.length > 0) {
-          void runToastMutation(
-            mongoApi.importSessions(localSessions),
-            {
-              pending: 'Đang đồng bộ các phiên cũ...',
-              success: `Đã đồng bộ ${localSessions.length} phiên`,
-              error: 'Không thể đồng bộ phiên cũ',
-            }
-          )
-        }
+        const resolvedSessions = (docs || []).map((s) => normalizeSessionForStorage(s, resolvedPlayers))
 
         setSessions(resolvedSessions)
-        saveSessions(resolvedSessions)
 
         // If no players in DB but sessions have names, ensure players exist
         const derived = getSessionPeople(resolvedSessions)
@@ -409,7 +380,6 @@ export default function App() {
       const next = isExisting
         ? prev.map((item) => (item.id === normalizedSession.id ? normalizedSession : item))
         : [normalizedSession, ...prev]
-      saveSessions(next)
       return next
     })
     setCurrentSession(null)
@@ -428,11 +398,7 @@ export default function App() {
   }, [extractNamesFromSession, normalizeSessionForStorage, sessions, players, runToastMutation, syncPlayersForNames])
 
   const handleDeleteSession = useCallback((id) => {
-    setSessions((prev) => {
-      const next = prev.filter((s) => s.id !== id)
-      saveSessions(next)
-      return next
-    })
+    setSessions((prev) => prev.filter((s) => s.id !== id))
     if (viewingSession?.id === id) {
       setViewingSession(null)
     }
@@ -451,11 +417,7 @@ export default function App() {
   const handleUpdateSession = useCallback((updatedSession) => {
     const normalizedSession = normalizeSessionForStorage(updatedSession, players)
     syncPlayersForNames(extractNamesFromSession(normalizedSession))
-    setSessions((prev) => {
-      const next = prev.map((s) => (s.id === normalizedSession.id ? normalizedSession : s))
-      saveSessions(next)
-      return next
-    })
+    setSessions((prev) => prev.map((s) => (s.id === normalizedSession.id ? normalizedSession : s)))
 
     setViewingSession((prev) => (prev?.id === normalizedSession.id ? normalizedSession : prev))
 
@@ -549,7 +511,6 @@ export default function App() {
         syncPlayersForNames(getSessionPeople(newOnes))
         setSessions((prev) => {
           const merged = [...newOnes, ...prev]
-          saveSessions(merged)
           if (mongoApi.isConfigured && newOnes.length) {
             void runToastMutation(
               mongoApi.importSessions(newOnes),

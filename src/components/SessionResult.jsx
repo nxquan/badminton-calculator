@@ -140,72 +140,200 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   })
 
   const generateBillImage = async () => {
-    const table = document.querySelector('.result-table-split')
-    if (!table) throw new Error('Table not found')
+    const splitTable = document.querySelector('.result-table-split')
+    if (!splitTable) throw new Error('Split table not found')
 
-    // Clone table into a temporary wrapper with padding
     const wrapper = document.createElement('div')
     wrapper.style.background = '#ffffff'
-    wrapper.style.padding = '12px'
+    wrapper.style.padding = '16px'
     wrapper.style.paddingTop = '32px'
     wrapper.style.display = 'inline-block'
     wrapper.style.position = 'absolute'
     wrapper.style.left = '-9999px'
     wrapper.style.top = '0'
+    wrapper.style.color = 'black'
+    wrapper.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
+    wrapper.style.maxWidth = '1200px'
 
-    const clone = table.cloneNode(true)
-    clone.style.maxWidth = '100%'
+    const createSectionTitle = (text) => {
+      const title = document.createElement('div')
+      title.style.fontWeight = '700'
+      title.style.fontSize = '15px'
+      title.style.marginTop = '24px'
+      title.style.marginBottom = '8px'
+      title.textContent = text
+      return title
+    }
 
-    // Build payment block
-    const paymentBlock = document.createElement('div')
-    paymentBlock.style.marginTop = '16px'
-    paymentBlock.style.display = 'flex'
-    paymentBlock.style.flexDirection = 'column'
-    paymentBlock.style.alignItems = 'center'
-    paymentBlock.style.gap = '8px'
-    paymentBlock.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
-    paymentBlock.style.color = 'black'
+    const createInfoRow = (text) => {
+      const row = document.createElement('div')
+      row.style.fontSize = '14px'
+      row.style.lineHeight = '1.5'
+      row.textContent = text
+      return row
+    }
 
-    const paymentTitle = document.createElement('div')
-    paymentTitle.style.fontWeight = '700'
-    paymentTitle.style.fontSize = '15px'
-    paymentTitle.textContent = 'Thanh toán qua QR'
-    paymentBlock.appendChild(paymentTitle)
+    const buildDetailsTable = () => {
+      const table = document.createElement('table')
+      table.style.width = '100%'
+      table.style.borderCollapse = 'collapse'
+      table.style.tableLayout = 'fixed'
+      table.style.marginTop = '8px'
 
-    const paymentCaption = document.createElement('div')
-    paymentCaption.style.fontSize = '13px'
-    paymentCaption.style.opacity = '0.85'
-    paymentCaption.style.textAlign = 'center'
-    paymentCaption.textContent = 'Quét mã QR bên dưới để chuyển khoản'
-    paymentBlock.appendChild(paymentCaption)
+      const colgroup = document.createElement('colgroup')
+      const widths = ['240px', '60px', '80px', 'auto', '80px']
+      for (const width of widths) {
+        const col = document.createElement('col')
+        col.style.width = width
+        colgroup.appendChild(col)
+      }
+      table.appendChild(colgroup)
 
-    const paymentQrWrapper = document.createElement('div')
-    paymentQrWrapper.style.background = '#fff'
-    paymentQrWrapper.style.borderRadius = '16px'
-    paymentQrWrapper.style.padding = '14px'
-    paymentQrWrapper.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
-    paymentQrWrapper.style.display = 'flex'
-    paymentQrWrapper.style.alignItems = 'center'
-    paymentQrWrapper.style.justifyContent = 'center'
+      const thead = document.createElement('thead')
+      const headerRow = document.createElement('tr')
+      const headerCells = [
+        'Khoản',
+        'Người trả',
+        'Số tiền',
+        'Người chơi',
+        '/người',
+      ]
+      for (const label of headerCells) {
+        const th = document.createElement('th')
+        th.style.padding = '8px 6px'
+        th.style.textAlign = 'left'
+        th.style.fontSize = '13px'
+        th.style.fontWeight = '700'
+        th.style.borderBottom = '1px solid rgba(0,0,0,0.12)'
+        th.textContent = label
+        headerRow.appendChild(th)
+      }
+      thead.appendChild(headerRow)
+      table.appendChild(thead)
 
-    const paymentQr = document.createElement('img')
-    paymentQr.alt = 'QR thanh toán'
-    paymentQr.src = paymentQrImage
-    paymentQr.style.width = '240px'
-    paymentQr.style.maxWidth = '100%'
-    paymentQr.style.display = 'block'
+      const tbody = document.createElement('tbody')
+      groupedEntries.forEach((group, groupIndex) => {
+        group.items.forEach((entry, itemIndex) => {
+          const perPerson = entry.amount / (entry.people.length || 1)
+          const isFirstInGroup = itemIndex === 0
+          const row = document.createElement('tr')
+          row.style.backgroundColor = groupIndex % 2 === 0 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.5)'
+          if (isFirstInGroup) {
+            row.style.borderTop = '1px solid rgba(59, 130, 246, 1)'
+          }
 
-    await new Promise((resolve, reject) => {
-      paymentQr.onload = resolve
-      paymentQr.onerror = reject
-    })
+          const fields = [
+            getEntryLabel(entry, expenseTypes),
+            entry?.payerObj?.name || entry?.payer || '',
+            formatMoney(entry.amount * 1000),
+          ]
 
-    paymentQrWrapper.appendChild(paymentQr)
-    paymentBlock.appendChild(paymentQrWrapper)
+          fields.forEach((value) => {
+            const td = document.createElement('td')
+            td.style.padding = '8px 6px'
+            td.style.verticalAlign = 'top'
+            td.style.whiteSpace = 'nowrap'
+            td.style.fontSize = '13px'
+            td.style.fontWeight = '500'
+            td.textContent = value
+            row.appendChild(td)
+          })
 
-    // Build header
+          const peopleCell = document.createElement('td')
+          peopleCell.style.padding = '8px 6px'
+          peopleCell.style.fontSize = '12px'
+          peopleCell.style.color = 'rgb(73, 101, 243)'
+          peopleCell.style.minWidth = '0'
+          const peopleGrid = document.createElement('div')
+          peopleGrid.style.display = 'grid'
+          peopleGrid.style.gridTemplateColumns = `repeat(${Math.max(playerColumns.length, 1)}, minmax(42px, 1fr))`
+          peopleGrid.style.gap = '8px'
+          peopleGrid.style.width = '100%'
+
+          playerColumns.forEach((name) => {
+            const active = (entry.people || []).includes(name)
+            const badge = document.createElement('span')
+            badge.style.display = 'flex'
+            badge.style.alignItems = 'center'
+            badge.style.justifyContent = 'center'
+            badge.style.padding = '2px 4px'
+            badge.style.borderRadius = '3px'
+            badge.style.fontWeight = '500'
+            badge.style.fontSize = '11px'
+            badge.style.whiteSpace = 'nowrap'
+            badge.style.backgroundColor = active ? 'rgba(73, 101, 243, 0.2)' : 'transparent'
+            badge.textContent = active ? name : ''
+            peopleGrid.appendChild(badge)
+          })
+
+          peopleCell.appendChild(peopleGrid)
+          row.appendChild(peopleCell)
+
+          const perPersonCell = document.createElement('td')
+          perPersonCell.style.padding = '8px 6px'
+          perPersonCell.style.whiteSpace = 'nowrap'
+          perPersonCell.style.color = 'var(--success)'
+          perPersonCell.style.fontWeight = '600'
+          perPersonCell.style.fontSize = '13px'
+          perPersonCell.textContent = formatMoney(Math.round(perPerson * 1000))
+          row.appendChild(perPersonCell)
+
+          tbody.appendChild(row)
+        })
+      })
+      table.appendChild(tbody)
+      return table
+    }
+
+    const buildPaymentBlock = async () => {
+      const paymentBlock = document.createElement('div')
+      paymentBlock.style.marginTop = '16px'
+      paymentBlock.style.display = 'flex'
+      paymentBlock.style.flexDirection = 'column'
+      paymentBlock.style.alignItems = 'center'
+      paymentBlock.style.gap = '8px'
+      paymentBlock.style.color = 'black'
+
+      const paymentTitle = document.createElement('div')
+      paymentTitle.style.fontWeight = '700'
+      paymentTitle.style.fontSize = '15px'
+      paymentTitle.textContent = 'Thanh toán qua QR'
+      paymentBlock.appendChild(paymentTitle)
+
+      const paymentCaption = document.createElement('div')
+      paymentCaption.style.fontSize = '13px'
+      paymentCaption.style.opacity = '0.85'
+      paymentCaption.style.textAlign = 'center'
+      paymentCaption.textContent = 'Quét mã QR bên dưới để chuyển khoản'
+      paymentBlock.appendChild(paymentCaption)
+
+      const paymentQrWrapper = document.createElement('div')
+      paymentQrWrapper.style.background = '#fff'
+      paymentQrWrapper.style.borderRadius = '16px'
+      paymentQrWrapper.style.padding = '14px'
+      paymentQrWrapper.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
+      paymentQrWrapper.style.display = 'flex'
+      paymentQrWrapper.style.alignItems = 'center'
+      paymentQrWrapper.style.justifyContent = 'center'
+
+      const paymentQr = document.createElement('img')
+      paymentQr.alt = 'QR thanh toán'
+      paymentQr.src = paymentQrImage
+      paymentQr.style.width = '240px'
+      paymentQr.style.maxWidth = '100%'
+      paymentQr.style.display = 'block'
+
+      await new Promise((resolve, reject) => {
+        paymentQr.onload = resolve
+        paymentQr.onerror = reject
+      })
+
+      paymentQrWrapper.appendChild(paymentQr)
+      paymentBlock.appendChild(paymentQrWrapper)
+      return paymentBlock
+    }
+
     const header = document.createElement('div')
-    header.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
     header.style.color = 'black'
     header.style.marginBottom = '8px'
     header.style.display = 'flex'
@@ -220,27 +348,29 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
     const infoLine = document.createElement('div')
     infoLine.style.display = 'flex'
+    infoLine.style.flexWrap = 'wrap'
     infoLine.style.gap = '16px'
     infoLine.style.alignItems = 'center'
 
-    const participantsCount = document.createElement('div')
-    participantsCount.textContent = `Số người tham gia: ${participants.length}`
-    infoLine.appendChild(participantsCount)
+    infoLine.appendChild(createInfoRow(`Số người tham gia: ${participants.length}`))
 
     const totalHours = (normalizedEntries || []).reduce((s, e) => s + (Number(e.hours) || 0), 0)
-    const hoursEl = document.createElement('div')
-    hoursEl.textContent = `Số giờ chơi: ${totalHours || '-'} `
-    infoLine.appendChild(hoursEl)
-
-    const costEl = document.createElement('div')
-    costEl.textContent = `Chi phí: ${formatMoney(Math.round(grandTotal * 1000))}`
-    infoLine.appendChild(costEl)
-
+    infoLine.appendChild(createInfoRow(`Số giờ chơi: ${totalHours || '-'}`))
+    infoLine.appendChild(createInfoRow(`Chi phí: ${formatMoney(Math.round(grandTotal * 1000))}`))
     header.appendChild(infoLine)
 
+    const splitClone = splitTable.cloneNode(true)
+    splitClone.style.maxWidth = '100%'
+    splitClone.style.marginTop = '8px'
+
+    wrapper.appendChild(createSectionTitle('I. Thông tin chung'))
     wrapper.appendChild(header)
-    wrapper.appendChild(clone)
-    wrapper.appendChild(paymentBlock)
+    wrapper.appendChild(createSectionTitle('II. Chi tiết khoản chi'))
+    wrapper.appendChild(buildDetailsTable())
+    wrapper.appendChild(createSectionTitle('III. Kết quả chia tiền'))
+    wrapper.appendChild(splitClone)
+    wrapper.appendChild(await buildPaymentBlock())
+
     document.body.appendChild(wrapper)
 
     try {
