@@ -3,6 +3,20 @@ import html2canvas from 'html2canvas'
 import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
 import paymentQrImage from '../files/qr-code.jpeg'
 
+const BADMINTON_EXPENSE_TYPES = new Set(['san', 'cau', 'tra-da'])
+
+const WEEKDAY_LABELS = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+
+const formatBillDate = (dateInput) => {
+  const date = new Date(dateInput || Date.now())
+  if (Number.isNaN(date.getTime())) return ''
+  const weekday = WEEKDAY_LABELS[date.getDay()] || ''
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${weekday}, ngày ${day}/${month}/${year}`
+}
+
 export default function SessionResult({ session, expenseTypes, onBack, onUpdateSession, onEditSession, players = [] }) {
   const idToName = Object.fromEntries((players || []).map((p) => [p.id, p.name]))
 
@@ -64,6 +78,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   const [settledPlayers, setSettledPlayers] = useState(session.settledPlayers || [])
   const [exportingImage, setExportingImage] = useState(false)
   const [copyingImage, setCopyingImage] = useState(false)
+  const [copyingText, setCopyingText] = useState(false)
 
   useEffect(() => {
     setSettledPlayers(session.settledPlayers || [])
@@ -158,7 +173,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     const createSectionTitle = (text) => {
       const title = document.createElement('div')
       title.style.fontWeight = '700'
-      title.style.fontSize = '15px'
+      title.style.fontSize = '32px'
       title.style.marginTop = '24px'
       title.style.marginBottom = '8px'
       title.textContent = text
@@ -452,6 +467,19 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     return breakdown
   }, [normalizedEntries, players])
 
+  const badmintonTotals = useMemo(() => {
+    const totals = {}
+    for (const entry of normalizedEntries) {
+      if (!BADMINTON_EXPENSE_TYPES.has(entry.type)) continue
+      const perPerson = entry.amount / (entry.people.length || 1)
+      for (const personName of entry.people) {
+        const name = personName || ''
+        totals[name] = (totals[name] || 0) + perPerson
+      }
+    }
+    return totals
+  }, [normalizedEntries])
+
   // Get all unique expense types sorted
   const allExpenseTypes = useMemo(() => {
     const typeSet = new Set(session.entries?.map(e => e.type) || [])
@@ -647,12 +675,31 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 className="btn btn-outline"
                 onClick={async () => {
                   try {
+                    setCopyingText(true)
+                    const billText = `${formatBillDate(session.date)}`
+                    await navigator.clipboard.writeText(billText)
+                  } catch (e) {
+                    console.error('Copy text error', e)
+                  } finally {
+                    setCopyingText(false)
+                  }
+                }}
+                disabled={copyingText}
+                style={{ marginLeft: '8px' }}
+              >
+                📋 Copy Time
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={async () => {
+                  try {
                     setCopyingImage(true)
                     const blob = await generateBillImage()
                     const item = new ClipboardItem({ 'image/png': blob })
                     await navigator.clipboard.write([item])
                   } catch (e) {
-                    console.error('Copy to clipboard error', e)
+                    console.error('Copy image error', e)
                   } finally {
                     setCopyingImage(false)
                   }
@@ -660,7 +707,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 disabled={copyingImage}
                 style={{ marginLeft: '8px' }}
               >
-                📋 Copy Bill
+                🖼️ Copy Bill Image
               </button>
             </div>
           </div>
@@ -706,6 +753,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               <tr>
                 <th>Người chơi</th>
                 <th>Phải trả</th>
+                <th>Tổng tiền cầu lông</th>
                 {allExpenseTypes.map((type) => (
                   <th key={type.value} style={{ fontSize: '0.9rem' }}>
                     {type.emoji} {type.label}
@@ -738,6 +786,9 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                         ) : null}
                       </td>
                       <td style={{color: 'red', fontWeight: 600}}>{formatMoney(Math.round(amount * 1000))}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--color-accent-dark)' }}>
+                        {badmintonTotals[name] ? formatMoney(Math.round(badmintonTotals[name] * 1000)) : '-'}
+                      </td>
                       {allExpenseTypes.map((type) => {
                         const typeAmount = expenseTypeBreakdown[type.value]?.[name] || 0
                         return (
@@ -803,6 +854,9 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               <tr className="result-total">
                 <td>Tổng cộng</td>
                 <td>{formatMoney(Math.round(grandTotal * 1000))}</td>
+                <td style={{ fontWeight: 600 }}>
+                  {formatMoney(Math.round(Object.values(badmintonTotals).reduce((sum, value) => sum + value, 0) * 1000))}
+                </td>
                 {allExpenseTypes.map((type) => {
                   const typeTotal = Object.values(expenseTypeBreakdown[type.value] || {}).reduce((s, v) => s + v, 0)
                   return (
