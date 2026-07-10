@@ -24,6 +24,7 @@ html {
   --color-success: #22C55E;
   --color-warning: #F59E0B;
   --color-error: #EF4444;
+  --color-blue: #00307c;
 
   --primary: var(--color-accent);
   --primary-hover: var(--color-accent-dark);
@@ -712,8 +713,10 @@ select:focus {
 .settle-toggle {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   cursor: pointer;
+  position: relative;
+  width: fit-content;
 }
 
 .settle-toggle-input {
@@ -738,6 +741,7 @@ select:focus {
   font-weight: 700;
   transition: all 0.15s ease;
   box-shadow: 0 1px 1px rgba(15, 23, 42, 0.05);
+  flex-shrink: 0;
 }
 
 .settle-toggle:hover .settle-toggle-box {

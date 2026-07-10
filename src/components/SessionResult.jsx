@@ -760,7 +760,6 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                   </th>
                 ))}
                 {transferTo && <th style = {{color: 'var(--color-accent)'}}>Chuyển cho {transferTo}</th>}
-                <th>Trạng thái</th>
                 <th>Đánh dấu</th>
               </tr>
             </thead>
@@ -777,7 +776,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
                   return (
                     <tr key={name} className={name === transferTo ? 'transfer-target-row' : ''}>
-                      <td style={{ fontWeight: 600, color: 'var(--color-accent-dark)' }}>
+                      <td style={{ fontWeight: 600, color: 'var(--color-blue)' }}>
                         {name}{' '}
                         {paid > 0 ? (
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
@@ -785,7 +784,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                           </span>
                         ) : null}
                       </td>
-                      <td style={{color: 'red', fontWeight: 600}}>{formatMoney(Math.round(amount * 1000))}</td>
+                      <td style={{color: 'var(--color-accent-dark)', fontWeight: 600}}>{formatMoney(Math.round(amount * 1000))}</td>
                       <td style={{ fontWeight: 600, color: 'var(--color-accent-dark)' }}>
                         {badmintonTotals[name] ? formatMoney(Math.round(badmintonTotals[name] * 1000)) : '-'}
                       </td>
@@ -802,48 +801,51 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                           {name === transferTo ? (
                             transferTotal > 0 ? (
                               <span style={{ color: 'var(--success)', fontWeight: 600 }}>
-                                Được nhận {formatMoney(Math.round(transferTotal * 1000))}
+                                +{formatMoney(Math.round(transferTotal * 1000))}
                               </span>
                             ) : (
                               <span style={{ color: 'var(--text-secondary)' }}>—</span>
                             )
                           ) : owe > 0 ? (
                             <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
-                              {formatMoney(Math.round(owe * 1000))}
+                              - {formatMoney(Math.round(owe * 1000))}
                             </span>
                           ) : owe < 0 ? (
                             <span style={{ color: 'var(--success)', fontWeight: 600 }}>
-                              Được nhận {formatMoney(Math.round(Math.abs(owe) * 1000))}
+                              +{formatMoney(Math.round(Math.abs(owe) * 1000))}
                             </span>
                           ) : (
                             <span style={{ color: 'var(--success)' }}>✓ Đã hòa</span>
                           )}
                         </td>
                       )}
-                      <td>
+                      <td style={{ textAlign: 'left', paddingLeft: '8px' }}>
                         {canSettle ? (
-                          isSettled ? (
-                            <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Paid</span>
-                          ) : (
-                            <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Pending</span>
-                          )
-                        ) : (
-                          <span style={{ color: 'var(--text-secondary)' }}>—</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        {canSettle ? (
-                          <label className="settle-toggle" aria-label={`Đánh dấu ${name} đã thanh toán`}>
-                            <input
-                              type="checkbox"
-                              className="settle-toggle-input"
-                              checked={isSettled}
-                              onChange={() => handleToggleSettled(name)}
-                            />
-                            <span className="settle-toggle-box" aria-hidden="true">
-                              ✓
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-start', width: '100%', minWidth: '96px' }}>
+                            <label className="settle-toggle" aria-label={`Đánh dấu ${name} đã thanh toán`}>
+                              <input
+                                type="checkbox"
+                                className="settle-toggle-input"
+                                checked={isSettled}
+                                onChange={() => handleToggleSettled(name)}
+                              />
+                              <span className="settle-toggle-box" aria-hidden="true">
+                                ✓
+                              </span>
+                            </label>
+                            <span
+                              style={{
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                color: isSettled ? 'var(--success)' : 'var(--danger)',
+                                minWidth: '62px',
+                                textAlign: 'left',
+                                display: 'inline-block',
+                              }}
+                            >
+                              {isSettled ? 'Paid' : 'Pending'}
                             </span>
-                          </label>
+                          </div>
                         ) : (
                           <span style={{ color: 'var(--text-secondary)' }}>—</span>
                         )}
