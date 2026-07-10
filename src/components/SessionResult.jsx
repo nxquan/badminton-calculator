@@ -95,8 +95,8 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     // Priority: session.transferTo (from DB) -> localStorage -> default participant
     if (session.transferTo && participants.includes(session.transferTo)) {
       setTransferTo(session.transferTo)
-      return
-    }
+        return
+      }
 
     try {
       const stored = localStorage.getItem(key)
@@ -556,10 +556,10 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
             <table className="result-table" style={{ marginBottom: 0, tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
                 <col style={{ width: '240px' }} />
-                <col style={{ width: '60px' }} />
-                <col style={{ width: '80px' }} />
+                <col style={{ width: '84px' }} />
+                <col style={{ width: '84px' }} />
                 <col />
-                <col style={{ width: '80px' }} />
+                <col style={{ width: '84px' }} />
               </colgroup>
               <thead>
                 <tr>
