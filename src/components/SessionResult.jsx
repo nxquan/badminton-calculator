@@ -229,7 +229,9 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
       const tbody = document.createElement('tbody')
       groupedEntries.forEach((group, groupIndex) => {
         group.items.forEach((entry, itemIndex) => {
-          const perPerson = entry.amount / (entry.people.length || 1)
+          const perPerson = (Array.isArray(entry.amounts) && entry.amounts.length === entry.people.length)
+            ? entry.amounts.reduce((sum, value) => sum + Number(value || 0), 0)
+            : entry.amount / (entry.people.length || 1)
           const isFirstInGroup = itemIndex === 0
           const row = document.createElement('tr')
           row.style.backgroundColor = groupIndex % 2 === 0 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.5)'
@@ -457,11 +459,14 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     const breakdown = {}
     for (const entry of normalizedEntries) {
       if (!breakdown[entry.type]) breakdown[entry.type] = {}
-      const perPerson = entry.amount / (entry.people.length || 1)
-      for (const personName of entry.people) {
+      const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
+      for (let index = 0; index < entry.people.length; index += 1) {
+        const personName = entry.people[index]
+        const amountForPerson = amounts.length === entry.people.length ? Number(amounts[index]) : entry.amount / (entry.people.length || 1)
         const name = personName || ''
+        if (!Number.isFinite(amountForPerson) || amountForPerson < 0) continue
         if (!breakdown[entry.type][name]) breakdown[entry.type][name] = 0
-        breakdown[entry.type][name] += perPerson
+        breakdown[entry.type][name] += amountForPerson
       }
     }
     return breakdown
@@ -471,10 +476,13 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     const totals = {}
     for (const entry of normalizedEntries) {
       if (!BADMINTON_EXPENSE_TYPES.has(entry.type)) continue
-      const perPerson = entry.amount / (entry.people.length || 1)
-      for (const personName of entry.people) {
+      const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
+      for (let index = 0; index < entry.people.length; index += 1) {
+        const personName = entry.people[index]
+        const amountForPerson = amounts.length === entry.people.length ? Number(amounts[index]) : entry.amount / (entry.people.length || 1)
         const name = personName || ''
-        totals[name] = (totals[name] || 0) + perPerson
+        if (!Number.isFinite(amountForPerson) || amountForPerson < 0) continue
+        totals[name] = (totals[name] || 0) + amountForPerson
       }
     }
     return totals
@@ -575,7 +583,9 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                   return (
                     <Fragment key={group.type}>
                       {group.items.map((entry, itemIndex) => {
-                        const perPerson = entry.amount / entry.people.length
+                        const perPerson = (Array.isArray(entry.amounts) && entry.amounts.length === entry.people.length)
+                          ? entry.amounts.reduce((sum, value) => sum + Number(value || 0), 0)
+                          : entry.amount / entry.people.length
                         const isFirstInGroup = itemIndex === 0
                         const bgColor = groupIndex % 2 === 0 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.5)'
                         const borderTop = isFirstInGroup ? '1px solid rgba(59, 130, 246, 1)' : 'none'

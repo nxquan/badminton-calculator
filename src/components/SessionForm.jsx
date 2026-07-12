@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
-import { PLAYERS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames } from '../constants'
+import { PLAYERS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames, shouldResetPeopleSelection } from '../constants'
 import PlayerAvatar from './PlayerAvatar'
 
 function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName, customName, onCustomNameChange }) {
@@ -618,6 +618,8 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
   const [amount, setAmount] = useState(type === 'san' ? 240 : '')
   const [note, setNote] = useState('')
   const [people, setPeople] = useState(lastPeople)
+  const [amounts, setAmounts] = useState([])
+  const [useDetailedAmounts, setUseDetailedAmounts] = useState(false)
   const [payer, setPayer] = useState(lastPayer)
   const [customName, setCustomName] = useState('')
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
@@ -633,10 +635,11 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
       type,
       amount: numAmount,
       hours: type === 'san' ? numHours : undefined,
-      
       note: note.trim(),
       payer,
       people: [...people],
+      amounts: useDetailedAmounts && amounts.length === people.length ? amounts : undefined,
+      useDetailedAmounts: useDetailedAmounts && people.length > 0,
     })
 
     setHours(type === 'san' ? '2' : '')
@@ -644,7 +647,9 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
     setNote('')
     setPayer(lastPayer)
     setCustomName('')
-    setPeople(['san', 'cau', 'tra-da'].includes(type) ? people : [])
+    setPeople(shouldResetPeopleSelection(type) ? [] : people)
+    setAmounts([])
+    setUseDetailedAmounts(false)
   }
 
 
@@ -667,8 +672,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
               setAmount('')
             }
             
-            // Reset people if type is not one of the main types
-            if (!['san', 'cau', 'tra-da'].includes(newType)) {
+            if (shouldResetPeopleSelection(newType)) {
               setPeople([])
             }
             }}
@@ -713,11 +717,59 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
 
 
 
-      <div className="form-row">
-        <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
-          <label>Người trả</label>
+      <div className="form-row" style={{ alignItems: 'flex-start' }}>
+        <div className="form-group" style={{ flex: '0 0 220px' }}>
+          <label>Người chi trả</label>
           <PayerPicker value={payer} players={players} onSelect={setPayer} />
         </div>
+
+        {type && (
+          <div className="form-group" style={{ flex: '1 1 auto', minWidth: '280px' }}>
+            <div style={{ display: 'flex',  lignItems: 'center', justifyContent: 'flex-end', gap: '8px', marginBottom: '6px' }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${useDetailedAmounts ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setUseDetailedAmounts((value) => !value)}
+                style={{ minWidth: '120px', marginBottom: 0 }}
+              >
+                {useDetailedAmounts ? 'Đang bật' : 'Bật tính chi tiết'}
+              </button>
+            </div>
+            {useDetailedAmounts && (
+              <div style={{ background: 'var(--card-bg)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+                  {people.map((personId, index) => {
+                    const personLabel = players.find((p) => p.id === personId)?.name || personId
+                    const currentValue = amounts[index] ?? ''
+                    return (
+                      <div key={personId} style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        <span style={{ minWidth: '70px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{personLabel}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="0"
+                          value={currentValue}
+                          style={{ width: '200px', maxWidth: '200px' }}
+                          onChange={(e) => {
+                            const next = [...amounts]
+                            next[index] = e.target.value
+                            setAmounts(next)
+                          }}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+                {people.length === 0 && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                    Chọn người tham gia trước để nhập giá riêng cho từng người.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: '12px' }}>
@@ -759,6 +811,8 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
   const [note, setNote] = useState(entry.note || '')
   const [payer, setPayer] = useState(entry.payer)
   const [people, setPeople] = useState(entry.people)
+  const [amounts, setAmounts] = useState(Array.isArray(entry.amounts) ? entry.amounts : [])
+  const [useDetailedAmounts, setUseDetailedAmounts] = useState(Boolean(entry.useDetailedAmounts))
   const [customName, setCustomName] = useState('')
   const sortedTypes = useMemo(() => sortExpenseTypes(expenseTypes), [expenseTypes])
 
@@ -769,6 +823,8 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
     setNote(entry.note || '')
     setPayer(entry.payer)
     setPeople(entry.people)
+    setAmounts(Array.isArray(entry.amounts) ? entry.amounts : [])
+    setUseDetailedAmounts(Boolean(entry.useDetailedAmounts))
     setCustomName('')
   }, [entry])
 
@@ -788,6 +844,8 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
       note: note.trim(),
       payer,
       people: [...people],
+      amounts: useDetailedAmounts && amounts.length === people.length ? amounts : undefined,
+      useDetailedAmounts: useDetailedAmounts && people.length > 0,
     })
   }
 
@@ -801,8 +859,7 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
             expenseTypes={sortedTypes}
             onSelect={(newType) => {
             setType(newType)
-            // Reset people if type is not one of the main types
-            if (!['san', 'cau', 'tra-da'].includes(newType)) {
+            if (shouldResetPeopleSelection(newType)) {
               setPeople([])
             }
             }}
@@ -840,11 +897,59 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
         </div>
       </div>
 
-      <div className="form-row">
+      <div className="form-row" style={{ alignItems: 'flex-start' }}>
         <div className="form-group" style={{ flex: '0 0 auto', minWidth: '150px' }}>
           <label>Người trả</label>
           <PayerPicker value={payer} players={players} onSelect={setPayer} />
         </div>
+
+        {type && (
+          <div className="form-group" style={{ flex: '1 1 auto', minWidth: '280px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${useDetailedAmounts ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setUseDetailedAmounts((value) => !value)}
+                style={{ minWidth: '120px' }}
+              >
+                {useDetailedAmounts ? 'Đang bật' : 'Bật tính chi tiết'}
+              </button>
+            </div>
+            {useDetailedAmounts && (
+              <div style={{ background: 'var(--card-bg)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+                  {people.map((personId, index) => {
+                    const personLabel = players.find((p) => p.id === personId)?.name || personId
+                    const currentValue = amounts[index] ?? ''
+                    return (
+                      <div key={personId} style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        <span style={{ minWidth: '70px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{personLabel}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="0"
+                          value={currentValue}
+                          style={{ width: '200px', maxWidth: '200px' }}
+                          onChange={(e) => {
+                            const next = [...amounts]
+                            next[index] = e.target.value
+                            setAmounts(next)
+                          }}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+                {people.length === 0 && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                    Chọn người tham gia trước để nhập giá riêng cho từng người.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: '12px' }}>
@@ -941,12 +1046,15 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
     ;(entries || []).forEach((entry) => {
       const label = String(getEntryLabel(entry, expenseTypes) || entry.type)
       const people = entry.people || []
-      const share = (entry.amount || 0) / Math.max(people.length, 1)
-      people.forEach((p) => {
+      const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
+      people.forEach((p, index) => {
         const name = idToName[p] || p
+        const amountForPerson = amounts.length === people.length ? Number(amounts[index]) : (entry.amount || 0) / Math.max(people.length, 1)
         if (!detail[name]) detail[name] = { total: 0, types: {} }
-        detail[name].total += share
-        detail[name].types[label] = (detail[name].types[label] || 0) + share
+        if (Number.isFinite(amountForPerson) && amountForPerson >= 0) {
+          detail[name].total += amountForPerson
+          detail[name].types[label] = (detail[name].types[label] || 0) + amountForPerson
+        }
       })
     })
     return detail
@@ -1420,12 +1528,15 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
                 entries.forEach((entry) => {
                   const label = String(getEntryLabel(entry, expenseTypes) || entry.type)
                   const people = entry.people || []
-                  const share = (entry.amount || 0) / Math.max(people.length, 1)
-                  people.forEach((p) => {
+                  const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
+                  people.forEach((p, index) => {
                     const name = idToName[p] || p
+                    const amountForPerson = amounts.length === people.length ? Number(amounts[index]) : (entry.amount || 0) / Math.max(people.length, 1)
                     if (!detail[name]) detail[name] = { total: 0, types: {} }
-                    detail[name].total += share
-                    detail[name].types[label] = (detail[name].types[label] || 0) + share
+                    if (Number.isFinite(amountForPerson) && amountForPerson >= 0) {
+                      detail[name].total += amountForPerson
+                      detail[name].types[label] = (detail[name].types[label] || 0) + amountForPerson
+                    }
                   })
                 })
 
@@ -1473,7 +1584,7 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
             className="card"
             style={{
               width: '100%',
-              maxWidth: '860px',
+              maxWidth: '1024px',
               marginBottom: 0,
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
               maxHeight: '85vh',

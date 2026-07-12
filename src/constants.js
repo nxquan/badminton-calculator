@@ -62,6 +62,10 @@ export function sortPlayerNames(names) {
   )
 }
 
+export function shouldResetPeopleSelection(type) {
+  return ['san', 'cau', 'tra-da'].includes(String(type || '').trim())
+}
+
 export function getSessionPeople(sessions) {
   return sortPlayerNames(
     sessions.flatMap((session) =>
@@ -94,9 +98,14 @@ export function calculateTotals(entries) {
     const people = Array.isArray(entry.people) ? entry.people.map(normalizePersonKey).filter(Boolean) : []
     if (people.length === 0 || entry.amount <= 0) continue
 
-    const perPerson = entry.amount / people.length
-    for (const person of people) {
-      totals[person] = (totals[person] || 0) + perPerson
+    const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
+    const useDetailedAmounts = (entry.useDetailedAmounts === true || (entry.useDetailedAmounts === undefined && amounts.length === people.length)) && amounts.length === people.length
+
+    for (let index = 0; index < people.length; index += 1) {
+      const person = people[index]
+      const amountForPerson = useDetailedAmounts ? Number(amounts[index]) : entry.amount / people.length
+      if (!Number.isFinite(amountForPerson) || amountForPerson < 0) continue
+      totals[person] = (totals[person] || 0) + amountForPerson
     }
   }
 

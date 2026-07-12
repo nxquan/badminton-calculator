@@ -7,8 +7,11 @@ function calcStats(sessions, expenseTypes = []) {
   for (const session of sessions) {
     for (const entry of session.entries) {
       if (!entry.people || entry.people.length === 0 || entry.amount <= 0) continue
-      const perPerson = entry.amount / entry.people.length
-      for (const rawPerson of entry.people) {
+      const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
+      for (let index = 0; index < entry.people.length; index += 1) {
+        const rawPerson = entry.people[index]
+        const amountForPerson = amounts.length === entry.people.length ? Number(amounts[index]) : entry.amount / entry.people.length
+        if (!Number.isFinite(amountForPerson) || amountForPerson < 0) continue
         // Normalize person key: may be an id string, a name string, or an object { id, name }
         let personKey = rawPerson
         if (rawPerson && typeof rawPerson === 'object') {
