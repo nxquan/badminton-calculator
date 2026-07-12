@@ -1115,7 +1115,7 @@ export default function App() {
       {/* Modal SessionForm - Phiên đánh mới / Chỉnh sửa */}
       {isAddSessionModalOpen && currentSession && (
         <div className="modal-backdrop" style={{ pointerEvents: 'auto' }}>
-          <div className="modal-content" style={{ maxWidth: '1080px', maxHeight: '90vh', padding: 16 }}>
+          <div className="modal-content" style={{ maxWidth: '1400px', maxHeight: '90vh', padding: 16 }}>
             <div className="modal-header">
               <h2>{isEditingSessionInModal ? 'Chỉnh sửa phiên' : 'Phiên đánh mới'}</h2>
               <button className="modal-close" onClick={handleBack}>✕</button>

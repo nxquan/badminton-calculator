@@ -1279,11 +1279,11 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
         <div className="table-wrap">
           <table className="result-table">
             <colgroup>
-              <col style={{ width: '120px' }} />
+              <col style={{ width: '200px' }} />
               <col style={{ width: '24px' }} />
               <col style={{ width: '92px' }} />
               <col />
-              <col style={{ width: '84px' }} />
+              {/* <col style={{ width: '84px' }} /> */}
               <col style={{ width: '72px' }} />
             </colgroup>
             <thead>
@@ -1292,7 +1292,7 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
                 <th>Người trả</th>
                 <th>Số tiền</th>
                 <th>Người chơi</th>
-                <th>/người</th>
+                {/* <th>/người</th> */}
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -1366,9 +1366,9 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
                                 })}
                               </div>
                             </td>
-                            <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
+                            {/* <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
                               {formatMoney(Math.round(perPerson * 1000))}
-                            </td>
+                            </td> */}
                             <td>
                               <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                                 <button
