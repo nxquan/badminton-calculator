@@ -386,7 +386,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     wrapper.appendChild(buildDetailsTable())
     wrapper.appendChild(createSectionTitle('III. Kết quả chia tiền'))
     wrapper.appendChild(splitClone)
-    wrapper.appendChild(await buildPaymentBlock())
+    // wrapper.appendChild(await buildPaymentBlock())
 
     document.body.appendChild(wrapper)
 
