@@ -674,6 +674,8 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
             
             if (shouldResetPeopleSelection(newType)) {
               setPeople([])
+            } else if (people.length === 0 && lastPeople.length > 0) {
+              setPeople(lastPeople)
             }
             }}
           />
@@ -982,7 +984,12 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
   const [entries, setEntries] = useState(session.entries || [])
   const [editingEntry, setEditingEntry] = useState(null)
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false)
-  const [lastPeople, setLastPeople] = useState([])
+  const [lastPeople, setLastPeople] = useState(() => {
+    const existingCore = (session.entries || []).find((e) => ['san', 'cau', 'tra-da'].includes(e.type) && Array.isArray(e.people) && e.people.length > 0)
+    if (existingCore) return existingCore.people
+    const anyWithPeople = (session.entries || []).find((e) => Array.isArray(e.people) && e.people.length > 0)
+    return anyWithPeople ? anyWithPeople.people : []
+  })
   const [lastPayer, setLastPayer] = useState(() => {
     const found = (players || []).find((p) => p.name === DEFAULT_PAYER)
     return found ? found.id : DEFAULT_PAYER

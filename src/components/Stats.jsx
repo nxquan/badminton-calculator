@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Filter, BarChart3, Trophy, Medal, Crown } from 'lucide-react'
 import { formatMoney, sortPlayerNames, sortExpenseTypes } from '../constants'
 
 function calcStats(sessions, expenseTypes = []) {
@@ -19,7 +20,7 @@ function calcStats(sessions, expenseTypes = []) {
         }
         if (!stats[personKey]) stats[personKey] = {}
         if (!stats[personKey][entry.type]) stats[personKey][entry.type] = 0
-        stats[personKey][entry.type] += perPerson
+        stats[personKey][entry.type] += amountForPerson
       }
     }
   }
@@ -40,9 +41,9 @@ function formatMonth(ym) {
 }
 
 function getMonthlyRank(index) {
-  if (index === 0) return { icon: '💎', label: '', className: 'rank-diamond' }
-  if (index === 1) return { icon: '🥇', label: '', className: 'rank-gold' }
-  if (index === 2) return { icon: '🥈', label: '', className: 'rank-silver' }
+  if (index === 0) return { icon: <Crown size={14} style={{ color: '#BE185D', verticalAlign: 'middle' }} />, label: '', className: 'rank-diamond' }
+  if (index === 1) return { icon: <Medal size={14} style={{ color: '#B45309', verticalAlign: 'middle' }} />, label: '', className: 'rank-gold' }
+  if (index === 2) return { icon: <Medal size={14} style={{ color: '#475569', verticalAlign: 'middle' }} />, label: '', className: 'rank-silver' }
   return null
 }
 
@@ -158,7 +159,9 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
   return (
     <div>
       <div className="card">
-        <div className="card-title">🔍 Bộ lọc</div>
+        <div className="card-title">
+          <Filter size={18} style={{ color: '#16A34A' }} /> Bộ lọc
+        </div>
         <div className="form-row" style={{ alignItems: 'flex-end' }}>
           <div className="form-group" style={{ flex: '0 0 auto', minWidth: '130px' }}>
             <label>Loại lọc</label>
@@ -203,13 +206,48 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
 
       <div className="card">
         <div className="card-title">
-          📊 Thống kê chi tiêu
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <BarChart3 size={18} style={{ color: '#16A34A' }} /> Thống kê chi tiêu
+          </span>
           {filterValue
             ? filterType === 'month'
               ? ` — ${formatMonth(filterValue)}`
               : ` — ${new Date(filterValue).toLocaleDateString('vi-VN')}`
             : ' — Tất cả'}
         </div>
+
+        {rows.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 20 }}>
+            {rows.slice(0, 3).map((topRow, idx) => {
+              const badges = [
+                { title: '🥇 QUÁN QUÂN', bg: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)', border: '#F59E0B', color: '#92400E', nameColor: '#0F172A' },
+                { title: '🥈 Á QUÂN I', bg: 'linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%)', border: '#94A3B8', color: '#475569', nameColor: '#0F172A' },
+                { title: '🥉 Á QUÂN II', bg: 'linear-gradient(135deg, #FFEDD5 0%, #FED7AA 100%)', border: '#F97316', color: '#9A3412', nameColor: '#0F172A' }
+              ]
+              const b = badges[idx]
+              return (
+                <div key={topRow.name} style={{
+                  background: b.bg,
+                  border: `1.5px solid ${b.border}`,
+                  borderRadius: 14,
+                  padding: '16px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  boxShadow: '0 4px 12px rgba(15, 23, 42, 0.06)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: b.color, letterSpacing: '0.05em' }}>{b.title}</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: b.nameColor }}>{topRow.name}</div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 800, color: b.color }}>
+                    {formatMoney(Math.round(topRow.total * 1000))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {rows.length === 0 ? (
           <div className="empty-state">
@@ -221,24 +259,24 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Thành viên</th>
+                  <th>Vận động viên</th>
                   {usedExpenseTypes.map((type) => (
-                    <th key={type.value} style={{ fontSize: '0.9rem' }}>
+                    <th key={type.value} style={{ fontSize: '0.85rem' }}>
                       {type.emoji} {type.label}
                     </th>
                   ))}
-                  <th>Tổng</th>
-                  {isAllView && <th className="stats-monthly-header">Chi tiêu / tháng</th>}
+                  <th>Tổng chi</th>
+                  {isAllView && <th className="stats-monthly-header">TB / tháng</th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, i) => {
-                  const rankInfo = isMonthlyView ? getMonthlyRank(i) : null
+                  const rankInfo = getMonthlyRank(i)
                   const monthlyAverage = activeMonthCount > 0 ? row.total / activeMonthCount : 0
                   return (
                     <tr key={row.name}>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{i + 1}</td>
-                      <td style={{ fontWeight: 600 }}>
+                      <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 700 }}>{i + 1}</td>
+                      <td style={{ fontWeight: 700 }}>
                         <span className="stats-member-name">{row.name}</span>
                         {rankInfo && (
                           <span className={`stats-rank-badge ${rankInfo.className}`}>
@@ -266,7 +304,7 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                   )
                 })}
                 <tr className="result-total">
-                  <td colSpan={2}>Tổng cộng</td>
+                  <td colSpan={2}>TỔNG</td>
                   {usedExpenseTypes.map((type) => (
                     <td key={type.value}>
                       {formatMoney(Math.round(columnSums[type.value] * 1000))}

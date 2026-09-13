@@ -1,56 +1,77 @@
 import React from 'react'
+import { Home, Calendar, Trophy, Users, UserCheck, CreditCard, BarChart3 } from 'lucide-react'
 
-export default function Sidebar({ onSelectMenu, className = '' }) {
+export default function Sidebar({ onSelectMenu, currentView = 'sessions', className = '' }) {
   return (
     <aside className={`sidebar ${className}`}>
       <div className="sidebar-section">
         <button
-          className="sidebar-menu-btn"
+          className={`sidebar-menu-btn ${currentView === 'home' ? 'active' : ''}`}
+          onClick={() => onSelectMenu && onSelectMenu('home')}
+        >
+          <Home size={18} /> Trang chủ
+        </button>
+      </div>
+
+      <div className="sidebar-section">
+        <button
+          className={`sidebar-menu-btn ${currentView === 'sessions' || currentView === 'session' ? 'active' : ''}`}
           onClick={() => onSelectMenu && onSelectMenu('sessions')}
         >
-          📁 Phiên cầu
+          <Calendar size={18} /> Phiên cầu
         </button>
       </div>
 
       <div className="sidebar-section">
         <button
-          className="sidebar-menu-btn"
+          className={`sidebar-menu-btn ${currentView === 'match-history' ? 'active' : ''}`}
           onClick={() => onSelectMenu && onSelectMenu('match-history')}
         >
-          🏆 Lịch sử thi đấu
+          <Trophy size={18} /> Lịch sử thi đấu
         </button>
       </div>
 
       <div className="sidebar-section">
         <button
-          className="sidebar-menu-btn"
+          className={`sidebar-menu-btn ${currentView === 'players' ? 'active' : ''}`}
           onClick={() => onSelectMenu && onSelectMenu('players')}
         >
-          🧑 Người chơi
+          <Users size={18} /> Vận động viên
         </button>
         <div className="sidebar-submenu">
-          <button className="sidebar-menu-btn" onClick={() => onSelectMenu && onSelectMenu('combo-T3')}>Thứ 3</button>
-          <button className="sidebar-menu-btn" onClick={() => onSelectMenu && onSelectMenu('combo-T7')}>Thứ 7</button>
+          <button
+            className={`sidebar-menu-btn ${currentView === 'combo-T3' ? 'active' : ''}`}
+            onClick={() => onSelectMenu && onSelectMenu('combo-T3')}
+          >
+            <UserCheck size={16} /> Nhóm Thứ 3
+          </button>
+          <button
+            className={`sidebar-menu-btn ${currentView === 'combo-T7' ? 'active' : ''}`}
+            onClick={() => onSelectMenu && onSelectMenu('combo-T7')}
+          >
+            <UserCheck size={16} /> Nhóm Thứ 7
+          </button>
         </div>
       </div>
 
       <div className="sidebar-section">
         <button
-          className="sidebar-menu-btn"
+          className={`sidebar-menu-btn ${currentView === 'types' ? 'active' : ''}`}
           onClick={() => onSelectMenu && onSelectMenu('types')}
         >
-          💳 Kinh phí
+          <CreditCard size={18} /> Kinh phí sân
         </button>
       </div>
 
       <div className="sidebar-section">
         <button
-          className="sidebar-menu-btn"
+          className={`sidebar-menu-btn ${currentView === 'stats' ? 'active' : ''}`}
           onClick={() => onSelectMenu && onSelectMenu('stats')}
         >
-          📊 Thống kê
+          <BarChart3 size={18} /> Bảng xếp hạng
         </button>
       </div>
     </aside>
   )
 }
+

@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { ToastContainer, toast } from 'react-toastify'
+import { Plus } from 'lucide-react'
 import SessionForm from './components/SessionForm'
 import Sidebar from './components/Sidebar'
 import * as mongoApi from './services/mongoApi'
 import { DEFAULT_EXPENSE_TYPES, getSessionPeople, sortExpenseTypes, sortPlayerNames, loadCombos } from './constants'
 import 'react-toastify/dist/ReactToastify.css'
 // Page imports
+import HomePage from './pages/HomePage'
 import SessionsPage from './pages/SessionsPage'
 import MatchHistoryPage from './pages/MatchHistoryPage'
 import SessionDetailPage from './pages/SessionDetailPage'
@@ -50,7 +52,7 @@ export default function App() {
   const [currentSession, setCurrentSession] = useState(null)
   const [viewingSession, setViewingSession] = useState(null)
   const [activeTab, setActiveTab] = useState('history')
-  const [sidebarView, setSidebarView] = useState({ view: 'sessions', session: null })
+  const [sidebarView, setSidebarView] = useState({ view: 'home', session: null })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [dbStatus, setDbStatus] = useState(mongoApi.isConfigured ? 'loading' : 'offline')
   const importRef = useRef(null)
@@ -732,34 +734,53 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-content">
-          <img src="./src/files/icon.png" alt="Badminton" className="header-icon" />
-          <div className="header-info">
-            <h1> Tính tiền cầu lông</h1>
-            <p>Chia tiền sân, cầu, trà đá, cơm</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <img src="./src/files/icon.png" alt="Badminton" className="header-icon" />
+            <div className="header-info">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <h1>🏸 SMASH CALCULATOR</h1>
+                {dbStatus === 'ready' && <span className="db-badge db-ready">🟢 MongoDB</span>}
+                {dbStatus === 'loading' && <span className="db-badge db-loading">🟡 Đang kết nối...</span>}
+                {dbStatus === 'error' && <span className="db-badge db-error">🔴 Lỗi DB</span>}
+                {dbStatus === 'offline' && <span className="db-badge db-loading">⚪ Offline</span>}
+              </div>
+              <p>Quản lý chi phí & Bảng xếp hạng Cầu Lông</p>
+            </div>
           </div>
-          <button
-            className="hamburger btn btn-outline"
-            aria-label="Toggle menu"
-            onClick={() => setIsSidebarOpen((v) => !v)}
-            style={{ display: 'none' }}
-          >
-            ☰
-          </button>
-          <a href="https://github.com/nxquan/badminton-calculator" target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
-            🐙 Contribution
-          </a>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+            <button
+              className="btn btn-add btn-sm"
+              onClick={handleNewSession}
+            >
+              <Plus size={16} /> Tạo phiên mới
+            </button>
+            <a href="https://github.com/nxquan/badminton-calculator" target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg> GitHub
+            </a>
+          </div>
         </div>
-        {dbStatus === 'error' && <span className="db-badge db-error" style={{ marginTop: 8 }}>🔴 Lỗi kết nối DB</span>}
       </header>
 
-      <div className="app-layout" style={{ display: 'flex', gap: 16 }}>
+      <div className="app-layout">
         <Sidebar
+          currentView={sidebarView.view}
           className={isSidebarOpen ? 'mobile-open' : 'collapsed'}
           onSelectMenu={(view) => { setSidebarView({ view, session: null }); setIsSidebarOpen(false) }}
         />
 
           <div className="app-content" style={{ flex: 1 }}>
             {/* Page routing based on sidebar selection */}
+            {sidebarView.view === 'home' && (
+              <HomePage
+                sessions={sessions}
+                players={players}
+                expenseTypes={expenseTypes}
+                onNewSession={handleNewSession}
+                onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
+                onNavigateTab={(view) => setSidebarView({ view, session: null })}
+              />
+            )}
             {sidebarView.view === 'sessions' && (
               <SessionsPage
                 sessions={sessions}
@@ -788,8 +809,9 @@ export default function App() {
             )}
             {sidebarView.view === 'players' && (
               <PlayersPage
-                  players={players}
-                  playerStats={playerStats}
+                players={players}
+                playerStats={playerStats}
+                sessions={sessions}
                 onAddClick={() => {
                   setPlayerInputValue('')
                   setPlayerAvatarSource('')
@@ -875,6 +897,7 @@ export default function App() {
             {sidebarView.view === 'types' && (
               <ExpenseTypesPage
                 expenseTypes={expenseTypes}
+                sessions={sessions}
                 onAddClick={() => {
                   setExpenseTypeLabel('')
                   setExpenseTypeEmoji('🧾')
@@ -896,7 +919,7 @@ export default function App() {
                 players={players}
               />
             )}
-            {!['sessions', 'match-history', 'session', 'players', 'types', 'stats', 'combo-T3', 'combo-T7'].includes(sidebarView.view) && (
+            {!['home', 'sessions', 'match-history', 'session', 'players', 'types', 'stats', 'combo-T3', 'combo-T7'].includes(sidebarView.view) && (
               <EmptyPage />
             )}
           </div>

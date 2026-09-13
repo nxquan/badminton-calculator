@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import html2canvas from 'html2canvas'
+import { Download, Copy, Image as ImageIcon, ArrowLeft, Pencil, QrCode, Check } from 'lucide-react'
 import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
 import paymentQrImage from '../files/qr-code.jpeg'
 
@@ -75,6 +76,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   }, [normalizedEntries, participants])
   const [activeResultTab, setActiveResultTab] = useState('entries')
   const [transferTo, setTransferTo] = useState(defaultTransferTo)
+  const [includeQrCode, setIncludeQrCode] = useState(true)
   const [settledPlayers, setSettledPlayers] = useState(session.settledPlayers || [])
   const [exportingImage, setExportingImage] = useState(false)
   const [copyingImage, setCopyingImage] = useState(false)
@@ -95,8 +97,8 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     // Priority: session.transferTo (from DB) -> localStorage -> default participant
     if (session.transferTo && participants.includes(session.transferTo)) {
       setTransferTo(session.transferTo)
-        return
-      }
+      return
+    }
 
     try {
       const stored = localStorage.getItem(key)
@@ -135,15 +137,17 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
   const handleSetTransferTo = (name) => {
     if (!canChangeTransferTo) return
-    setTransferTo(name)
+    const nextVal = transferTo === name ? '' : name
+    setTransferTo(nextVal)
+    if (nextVal) setIncludeQrCode(true)
     try {
-      localStorage.setItem(`session.transferTo.${session.id}`, name)
+      localStorage.setItem(`session.transferTo.${session.id}`, nextVal)
     } catch (e) {
       // ignore
     }
 
     if (onUpdateSession) {
-      onUpdateSession({ ...session, transferTo: name })
+      onUpdateSession({ ...session, transferTo: nextVal })
     }
   }
 
@@ -155,243 +159,197 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   })
 
   const generateBillImage = async () => {
-    const splitTable = document.querySelector('.result-table-split')
-    if (!splitTable) throw new Error('Split table not found')
+    const totalHours = (normalizedEntries || []).reduce((s, e) => s + (Number(e.hours) || 0), 0)
+    const showQrCode = Boolean(transferTo && includeQrCode)
 
     const wrapper = document.createElement('div')
-    wrapper.style.background = '#ffffff'
-    wrapper.style.padding = '16px'
-    wrapper.style.paddingTop = '32px'
-    wrapper.style.display = 'inline-block'
     wrapper.style.position = 'absolute'
     wrapper.style.left = '-9999px'
     wrapper.style.top = '0'
-    wrapper.style.color = 'black'
-    wrapper.style.fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif'
-    wrapper.style.maxWidth = '1200px'
+    wrapper.style.width = '780px'
+    wrapper.style.background = '#F1F5F9'
+    wrapper.style.padding = '20px'
+    wrapper.style.fontFamily = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
+    wrapper.style.boxSizing = 'border-box'
 
-    const createSectionTitle = (text) => {
-      const title = document.createElement('div')
-      title.style.fontWeight = '700'
-      title.style.fontSize = '32px'
-      title.style.marginTop = '24px'
-      title.style.marginBottom = '8px'
-      title.textContent = text
-      return title
-    }
+    wrapper.innerHTML = `
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.12); border: 1.5px solid #E2E8F0;">
+        <!-- Header Banner -->
+        <div style="background: linear-gradient(135deg, #15803D 0%, #16A34A 50%, #22C55E 100%); padding: 22px 24px; color: #FFFFFF; position: relative;">
+          <div style="height: 4px; background: linear-gradient(90deg, #4ADE80, #FACC15, #38BDF8); position: absolute; top: 0; left: 0; right: 0;"></div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #DCFCE7; margin-bottom: 4px;">⚡ SMASH CALCULATOR</div>
+              <div style="font-size: 1.35rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.01em;">🏸 PHIẾU TÍNH TIỀN PHIÊN CẦU LÔNG</div>
+              <div style="font-size: 0.85rem; color: #F0FDF4; font-weight: 600; margin-top: 4px;">📅 ${formattedDate}</div>
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 9px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3); text-align: right;">
+              <div style="font-size: 0.7rem; color: #DCFCE7; font-weight: 700;">TỔNG KINH PHÍ</div>
+              <div style="font-size: 1.25rem; font-weight: 800; color: #FFFFFF;">${formatMoney(Math.round(grandTotal * 1000))}</div>
+            </div>
+          </div>
+        </div>
 
-    const createInfoRow = (text) => {
-      const row = document.createElement('div')
-      row.style.fontSize = '14px'
-      row.style.lineHeight = '1.5'
-      row.textContent = text
-      return row
-    }
+        <!-- Content Container -->
+        <div style="padding: 20px;">
+          <!-- 3 Quick Stat Cards -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+            <div style="background: #F0FDF4; border: 1.5px solid #BBF7D0; border-radius: 12px; padding: 10px 14px;">
+              <div style="font-size: 0.72rem; font-weight: 700; color: #15803D;">👥 Số người tham gia</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #0F172A; margin-top: 2px;">${participants.length} tay vợt</div>
+            </div>
+            <div style="background: #FEF3C7; border: 1.5px solid #FDE68A; border-radius: 12px; padding: 10px 14px;">
+              <div style="font-size: 0.72rem; font-weight: 700; color: #B45309;">⏱️ Thời gian chơi</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #0F172A; margin-top: 2px;">${totalHours ? `${totalHours} giờ` : 'Cố định'}</div>
+            </div>
+            <div style="background: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 10px 14px;">
+              <div style="font-size: 0.72rem; font-weight: 700; color: #1D4ED8;">🏦 Chuyển khoản cho</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #0F172A; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${transferTo || 'Chưa chọn'}</div>
+            </div>
+          </div>
 
-    const buildDetailsTable = () => {
-      const table = document.createElement('table')
-      table.style.width = '100%'
-      table.style.borderCollapse = 'collapse'
-      table.style.tableLayout = 'fixed'
-      table.style.marginTop = '8px'
+          <!-- Section I: Chi tiết khoản chi -->
+          <div style="margin-bottom: 20px;">
+            <div style="font-size: 0.9rem; font-weight: 800; color: #0F172A; margin-bottom: 8px;">
+              📋 CHI TIẾT CÁC KHOẢN CHI PHÍ
+            </div>
+            <table style="width: 100%; border-collapse: collapse; border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; font-size: 0.82rem; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 26%;" />
+                <col style="width: 20%;" />
+                <col style="width: 18%;" />
+                <col style="width: 16%;" />
+                <col style="width: 20%;" />
+              </colgroup>
+              <thead>
+                <tr style="background: #F8FAFC; color: #475569; border-bottom: 1.5px solid #E2E8F0; text-align: left;">
+                  <th style="padding: 8px 10px; white-space: nowrap;">Khoản chi</th>
+                  <th style="padding: 8px 10px; white-space: nowrap;">Người ứng trả</th>
+                  <th style="padding: 8px 10px; text-align: right; white-space: nowrap;">Số tiền</th>
+                  <th style="padding: 8px 10px; text-align: center; white-space: nowrap;">Số người</th>
+                  <th style="padding: 8px 10px; text-align: right; white-space: nowrap;">Chia lẻ /người</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${normalizedEntries.map((e, idx) => {
+      const perPerson = (Array.isArray(e.amounts) && e.amounts.length === e.people.length)
+        ? e.amounts.reduce((sum, v) => sum + Number(v || 0), 0)
+        : e.amount / (e.people.length || 1)
+      return `
+                    <tr style="border-bottom: 1px solid #F1F5F9; background: ${idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'};">
+                      <td style="padding: 8px 10px; font-weight: 700; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${getEntryLabel(e, expenseTypes)}</td>
+                      <td style="padding: 8px 10px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${e.payer}</td>
+                      <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: #0F172A; white-space: nowrap;">${formatMoney(Math.round(e.amount * 1000))}</td>
+                      <td style="padding: 8px 10px; text-align: center; color: #64748B; white-space: nowrap;">${e.people.length} người</td>
+                      <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: #16A34A; white-space: nowrap;">${formatMoney(Math.round(perPerson * 1000))}</td>
+                    </tr>
+                  `
+    }).join('')}
+              </tbody>
+            </table>
+          </div>
 
-      const colgroup = document.createElement('colgroup')
-      const widths = ['240px', '60px', '80px', 'auto', '80px']
-      for (const width of widths) {
-        const col = document.createElement('col')
-        col.style.width = width
-        colgroup.appendChild(col)
-      }
-      table.appendChild(colgroup)
+          <!-- Section II: Kết quả chia tiền -->
+          <div style="margin-bottom: 20px;">
+            <div style="font-size: 0.9rem; font-weight: 800; color: #0F172A; margin-bottom: 8px;">
+              💵 KẾT QUẢ CHIA TIỀN CẦN CHUYỂN KHOẢN
+            </div>
+            <table style="width: 100%; border-collapse: collapse; border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; font-size: 0.82rem; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 25%;" />
+                <col style="width: 15%;" />
+                <col style="width: 15%;" />
+                <col style="width: 27%;" />
+                <col style="width: 18%;" />
+              </colgroup>
+              <thead>
+                <tr style="background: #F8FAFC; color: #475569; border-bottom: 1.5px solid #E2E8F0; text-align: left;">
+                  <th style="padding: 8px 8px; white-space: nowrap;">Vận động viên</th>
+                  <th style="padding: 8px 8px; text-align: right; white-space: nowrap;">Phải trả</th>
+                  <th style="padding: 8px 8px; text-align: right; white-space: nowrap;">Đã trả trước</th>
+                  <th style="padding: 8px 8px; text-align: right; overflow: hidden; text-overflow: ellipsis; line-height: 1.25;">
+                    <div style="font-size: 0.72rem; color: #64748B; font-weight: 600;">CẦN CHUYỂN CHO</div>
+                    <div style="color: #15803D; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${transferTo || 'Trưởng nhóm'}</div>
+                  </th>
+                  <th style="padding: 8px 8px; text-align: center; white-space: nowrap;">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([name, amount]) => {
+      const paid = normalizedEntries.filter((entry) => entry.payer === name).reduce((sum, entry) => sum + entry.amount, 0)
+      const owe = amount - paid
+      const isTransferTarget = name === transferTo
+      const isSettled = settledPlayers.includes(name)
+      const oweAmountToTarget = isTransferTarget ? 0 : Math.max(0, owe)
 
-      const thead = document.createElement('thead')
-      const headerRow = document.createElement('tr')
-      const headerCells = [
-        'Khoản',
-        'Người trả',
-        'Số tiền',
-        'Người chơi',
-        '/người',
-      ]
-      for (const label of headerCells) {
-        const th = document.createElement('th')
-        th.style.padding = '8px 6px'
-        th.style.textAlign = 'left'
-        th.style.fontSize = '13px'
-        th.style.fontWeight = '700'
-        th.style.borderBottom = '1px solid rgba(0,0,0,0.12)'
-        th.textContent = label
-        headerRow.appendChild(th)
-      }
-      thead.appendChild(headerRow)
-      table.appendChild(thead)
+      return `
+                    <tr style="border-bottom: 1px solid #F1F5F9; background: ${isTransferTarget ? '#F0FDF4' : '#FFFFFF'};">
+                      <td style="padding: 8px 8px; font-weight: 700; color: ${isTransferTarget ? '#15803D' : '#0F172A'};">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; min-width: 0;">
+                          <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</span>
+                          ${isTransferTarget ? '<span style="font-size: 0.64rem; background: #DCFCE7; color: #15803D; padding: 1px 5px; border-radius: 999px; font-weight: 800; flex-shrink: 0; white-space: nowrap;">Người nhận</span>' : ''}
+                        </div>
+                      </td>
+                      <td style="padding: 8px 8px; text-align: right; font-weight: 700; color: #0F172A; white-space: nowrap;">${formatMoney(Math.round(amount * 1000))}</td>
+                      <td style="padding: 8px 8px; text-align: right; color: #64748B; white-space: nowrap;">${paid > 0 ? formatMoney(Math.round(paid * 1000)) : '-'}</td>
+                      <td style="padding: 8px 8px; text-align: right; font-weight: 800; color: ${oweAmountToTarget > 0 ? '#EA580C' : '#16A34A'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${isTransferTarget ? '0 VND (Nhận tiền)' : (oweAmountToTarget > 0 ? formatMoney(Math.round(oweAmountToTarget * 1000)) : '0 VND')}
+                      </td>
+                      <td style="padding: 8px 8px; text-align: center; white-space: nowrap;">
+                        ${isSettled || isTransferTarget
+          ? '<span style="font-size: 0.72rem; font-weight: 800; color: #15803D; background: #DCFCE7; padding: 3px 8px; border-radius: 999px; white-space: nowrap; display: inline-block;">✓ Đã xong</span>'
+          : '<span style="font-size: 0.72rem; font-weight: 800; color: #C2410C; background: #FFEDD5; padding: 3px 8px; border-radius: 999px; white-space: nowrap; display: inline-block;">⏳ Chờ CK</span>'}
+                      </td>
+                    </tr>
+                  `
+    }).join('')}
+              </tbody>
+            </table>
+          </div>
 
-      const tbody = document.createElement('tbody')
-      groupedEntries.forEach((group, groupIndex) => {
-        group.items.forEach((entry, itemIndex) => {
-          const perPerson = (Array.isArray(entry.amounts) && entry.amounts.length === entry.people.length)
-            ? entry.amounts.reduce((sum, value) => sum + Number(value || 0), 0)
-            : entry.amount / (entry.people.length || 1)
-          const isFirstInGroup = itemIndex === 0
-          const row = document.createElement('tr')
-          row.style.backgroundColor = groupIndex % 2 === 0 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.5)'
-          if (isFirstInGroup) {
-            row.style.borderTop = '1px solid rgba(59, 130, 246, 1)'
-          }
+          ${showQrCode ? `
+            <!-- Bottom Payment QR & Transfer Info -->
+            <div style="background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%); border: 1.5px solid #E2E8F0; border-radius: 14px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+              <div style="flex: 1;">
+                <div style="font-size: 0.9rem; font-weight: 800; color: #0F172A; margin-bottom: 4px;">📲 THANH TOÁN CHUYỂN KHOẢN NHANH</div>
+                <div style="font-size: 0.8rem; color: #475569; line-height: 1.4;">
+                  Vui lòng chuyển khoản chi phí phiên cầu cho <strong>${transferTo}</strong>.<br/>
+                  Cú pháp CK: <code style="background: #E2E8F0; padding: 2px 7px; border-radius: 6px; color: #0F172A; font-weight: 800; word-break: break-word;">${transferTo} Cau Long ${session.date || ''}</code>
+                </div>
+              </div>
+              <div style="background: #FFFFFF; padding: 6px; border-radius: 12px; border: 1px solid #CBD5E1; box-shadow: 0 4px 12px rgba(0,0,0,0.06); text-align: center;">
+                <img id="export-bill-qr" src="${paymentQrImage}" alt="QR Thanh toán" style="width: 115px; height: 115px; object-fit: contain; display: block; border-radius: 8px;" />
+                <div style="font-size: 0.68rem; font-weight: 800; color: #16A34A; margin-top: 3px;">Quét QR CK</div>
+              </div>
+            </div>
+          ` : ''}
 
-          const fields = [
-            getEntryLabel(entry, expenseTypes),
-            entry?.payerObj?.name || entry?.payer || '',
-            formatMoney(entry.amount * 1000),
-          ]
-
-          fields.forEach((value) => {
-            const td = document.createElement('td')
-            td.style.padding = '8px 6px'
-            td.style.verticalAlign = 'top'
-            td.style.whiteSpace = 'nowrap'
-            td.style.fontSize = '13px'
-            td.style.fontWeight = '500'
-            td.textContent = value
-            row.appendChild(td)
-          })
-
-          const peopleCell = document.createElement('td')
-          peopleCell.style.padding = '8px 6px'
-          peopleCell.style.fontSize = '12px'
-          peopleCell.style.color = 'rgb(73, 101, 243)'
-          peopleCell.style.minWidth = '0'
-          const peopleGrid = document.createElement('div')
-          peopleGrid.style.display = 'grid'
-          peopleGrid.style.gridTemplateColumns = `repeat(${Math.max(playerColumns.length, 1)}, minmax(42px, 1fr))`
-          peopleGrid.style.gap = '8px'
-          peopleGrid.style.width = '100%'
-
-          playerColumns.forEach((name) => {
-            const active = (entry.people || []).includes(name)
-            const badge = document.createElement('span')
-            badge.style.display = 'flex'
-            badge.style.alignItems = 'center'
-            badge.style.justifyContent = 'center'
-            badge.style.padding = '2px 4px'
-            badge.style.borderRadius = '3px'
-            badge.style.fontWeight = '500'
-            badge.style.fontSize = '11px'
-            badge.style.whiteSpace = 'nowrap'
-            badge.style.backgroundColor = active ? 'rgba(73, 101, 243, 0.2)' : 'transparent'
-            badge.textContent = active ? name : ''
-            peopleGrid.appendChild(badge)
-          })
-
-          peopleCell.appendChild(peopleGrid)
-          row.appendChild(peopleCell)
-
-          const perPersonCell = document.createElement('td')
-          perPersonCell.style.padding = '8px 6px'
-          perPersonCell.style.whiteSpace = 'nowrap'
-          perPersonCell.style.color = 'var(--success)'
-          perPersonCell.style.fontWeight = '600'
-          perPersonCell.style.fontSize = '13px'
-          perPersonCell.textContent = formatMoney(Math.round(perPerson * 1000))
-          row.appendChild(perPersonCell)
-
-          tbody.appendChild(row)
-        })
-      })
-      table.appendChild(tbody)
-      return table
-    }
-
-    const buildPaymentBlock = async () => {
-      const paymentBlock = document.createElement('div')
-      paymentBlock.style.marginTop = '16px'
-      paymentBlock.style.display = 'flex'
-      paymentBlock.style.flexDirection = 'column'
-      paymentBlock.style.alignItems = 'center'
-      paymentBlock.style.gap = '8px'
-      paymentBlock.style.color = 'black'
-
-      const paymentTitle = document.createElement('div')
-      paymentTitle.style.fontWeight = '700'
-      paymentTitle.style.fontSize = '15px'
-      paymentTitle.textContent = 'Thanh toán qua QR'
-      paymentBlock.appendChild(paymentTitle)
-
-      const paymentCaption = document.createElement('div')
-      paymentCaption.style.fontSize = '13px'
-      paymentCaption.style.opacity = '0.85'
-      paymentCaption.style.textAlign = 'center'
-      paymentCaption.textContent = 'Quét mã QR bên dưới để chuyển khoản'
-      paymentBlock.appendChild(paymentCaption)
-
-      const paymentQrWrapper = document.createElement('div')
-      paymentQrWrapper.style.background = '#fff'
-      paymentQrWrapper.style.borderRadius = '16px'
-      paymentQrWrapper.style.padding = '14px'
-      paymentQrWrapper.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
-      paymentQrWrapper.style.display = 'flex'
-      paymentQrWrapper.style.alignItems = 'center'
-      paymentQrWrapper.style.justifyContent = 'center'
-
-      const paymentQr = document.createElement('img')
-      paymentQr.alt = 'QR thanh toán'
-      paymentQr.src = paymentQrImage
-      paymentQr.style.width = '240px'
-      paymentQr.style.maxWidth = '100%'
-      paymentQr.style.display = 'block'
-
-      await new Promise((resolve, reject) => {
-        paymentQr.onload = resolve
-        paymentQr.onerror = reject
-      })
-
-      paymentQrWrapper.appendChild(paymentQr)
-      paymentBlock.appendChild(paymentQrWrapper)
-      return paymentBlock
-    }
-
-    const header = document.createElement('div')
-    header.style.color = 'black'
-    header.style.marginBottom = '8px'
-    header.style.display = 'flex'
-    header.style.flexDirection = 'column'
-    header.style.gap = '4px'
-
-    const hTitle = document.createElement('div')
-    hTitle.style.fontWeight = '700'
-    hTitle.style.fontSize = '16px'
-    hTitle.textContent = `Phiên: ${formattedDate}`
-    header.appendChild(hTitle)
-
-    const infoLine = document.createElement('div')
-    infoLine.style.display = 'flex'
-    infoLine.style.flexWrap = 'wrap'
-    infoLine.style.gap = '16px'
-    infoLine.style.alignItems = 'center'
-
-    infoLine.appendChild(createInfoRow(`Số người tham gia: ${participants.length}`))
-
-    const totalHours = (normalizedEntries || []).reduce((s, e) => s + (Number(e.hours) || 0), 0)
-    infoLine.appendChild(createInfoRow(`Số giờ chơi: ${totalHours || '-'}`))
-    infoLine.appendChild(createInfoRow(`Chi phí: ${formatMoney(Math.round(grandTotal * 1000))}`))
-    header.appendChild(infoLine)
-
-    const splitClone = splitTable.cloneNode(true)
-    splitClone.style.maxWidth = '100%'
-    splitClone.style.marginTop = '8px'
-
-    wrapper.appendChild(createSectionTitle('I. Thông tin chung'))
-    wrapper.appendChild(header)
-    wrapper.appendChild(createSectionTitle('II. Chi tiết khoản chi'))
-    wrapper.appendChild(buildDetailsTable())
-    wrapper.appendChild(createSectionTitle('III. Kết quả chia tiền'))
-    wrapper.appendChild(splitClone)
-    // wrapper.appendChild(await buildPaymentBlock())
+          <!-- Footer Watermark -->
+          <div style="text-align: center; margin-top: 16px; padding-top: 10px; border-top: 1px solid #E2E8F0; font-size: 0.75rem; color: #94A3B8; font-weight: 600;">
+            ⚡ Smash Calculator - Ứng Dụng Quản Lý Chi Phí & Bảng Xếp Hạng Cầu Lông
+          </div>
+        </div>
+      </div>
+    `
 
     document.body.appendChild(wrapper)
 
+    // Ensure QR image is loaded before canvas render
+    const qrImg = wrapper.querySelector('#export-bill-qr')
+    if (qrImg && !qrImg.complete) {
+      await new Promise((resolve) => {
+        qrImg.onload = resolve
+        qrImg.onerror = resolve
+      })
+    }
+
     try {
-      const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: null })
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        backgroundColor: null,
+        useCORS: true,
+        logging: false,
+      })
       return new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {
           if (blob) {
@@ -399,10 +357,14 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
           } else {
             reject(new Error('Failed to create blob'))
           }
-        })
+        }, 'image/png')
       })
     } finally {
-      try { document.body.removeChild(wrapper) } catch (e) { /* ignore */ }
+      try {
+        document.body.removeChild(wrapper)
+      } catch (e) {
+        /* ignore */
+      }
     }
   }
 
@@ -515,7 +477,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     <div>
       <div className="result-top-actions">
         <button className="btn btn-outline" onClick={onBack}>
-          ← Quay lại
+          <ArrowLeft size={16} /> Quay lại
         </button>
         {canEditSession && (
           <button
@@ -530,7 +492,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               onEditSession?.({ ...session, entries: formEntries })
             }}
           >
-            ✎ Chỉnh sửa phiên
+            <Pencil size={16} /> Chỉnh sửa phiên
           </button>
         )}
       </div>
@@ -563,19 +525,19 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
           <div className="table-wrap">
             <table className="result-table" style={{ marginBottom: 0, tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
-                <col style={{ width: '240px' }} />
-                <col style={{ width: '84px' }} />
-                <col style={{ width: '84px' }} />
-                <col />
-                <col style={{ width: '84px' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '13%' }} />
+                <col style={{ width: '17%' }} />
+                <col style={{ width: '34%' }} />
+                <col style={{ width: '14%' }} />
               </colgroup>
               <thead>
                 <tr>
                   <th>Khoản</th>
-                  <th style={{textAlign: 'center'}}>Người trả</th>
-                  <th style={{textAlign: 'right'}}>Số tiền</th>
-                  <th style={{textAlign: 'center'}}>Người chơi</th>
-                  <th style={{textAlign: 'right'}}>/người</th>
+                  <th style={{ textAlign: 'center' }}>Người trả</th>
+                  <th style={{ textAlign: 'right', paddingRight: '12px' }}>Số tiền</th>
+                  <th style={{ textAlign: 'center' }}>Người chơi</th>
+                  <th style={{ textAlign: 'right', paddingRight: '8px' }}>/người</th>
                 </tr>
               </thead>
               <tbody>
@@ -599,7 +561,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                             <td style={{ whiteSpace: 'nowrap' }}>
                               {entry?.payerObj?.name || entry?.payer || ''}
                             </td>
-                            <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                            <td style={{ textAlign: 'right', paddingRight: '12px', whiteSpace: 'nowrap', fontWeight: 600 }}>
                               {formatMoney(entry.amount * 1000)}
                             </td>
                             <td style={{ fontSize: '0.75rem', color: 'rgb(73, 101, 243)', minWidth: 0 }}>
@@ -636,7 +598,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                                 })}
                               </div>
                             </td>
-                            <td style={{ whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
+                            <td style={{ textAlign: 'right', paddingRight: '8px', whiteSpace: 'nowrap', color: 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
                               {formatMoney(Math.round(perPerson * 1000))}
                             </td>
                           </tr>
@@ -653,7 +615,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
       {activeResultTab === 'split' && (
         <div className="card">
-          <div className="card-title" style={{marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <div className="card-title" style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             💵 Kết quả chia tiền
             <div>
               <button
@@ -678,7 +640,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 }}
                 disabled={exportingImage}
               >
-                📤 Export Bill
+                <Download size={16} /> Export Bill
               </button>
               <button
                 type="button"
@@ -697,7 +659,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 disabled={copyingText}
                 style={{ marginLeft: '8px' }}
               >
-                📋 Copy Time
+                <Copy size={16} /> Copy Time
               </button>
               <button
                 type="button"
@@ -717,45 +679,140 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                 disabled={copyingImage}
                 style={{ marginLeft: '8px' }}
               >
-                🖼️ Copy Bill Image
+                <ImageIcon size={16} /> Copy Bill Image
               </button>
             </div>
           </div>
 
-          <div style={{ marginBottom: '4px' }}>
-            <label
+          <div
+            style={{
+              marginBottom: '16px',
+              background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)',
+              padding: '12px 14px',
+              borderRadius: '14px',
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+            }}
+          >
+            <div
               style={{
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                color: 'var(--text-secondary)',
-                marginBottom: '4px',
                 display: 'flex',
                 alignItems: 'center',
-
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+                marginBottom: '10px',
               }}
             >
-              Chuyển tiền cho ai?
-              {!canChangeTransferTo && (
-              <div style={{ marginLeft: '6px', color: 'var(--color-error)', fontWeight: 600 }}>
-                Đã có người thanh toán nên không thể đổi người chuyển tiền.
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1E293B' }}>
+                  🏦 Người nhận chuyển khoản
+                </span>
+                {transferTo && (
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      color: '#15803D',
+                      background: '#DCFCE7',
+                      padding: '2px 8px',
+                      borderRadius: '999px',
+                      border: '1px solid #86EFAC',
+                    }}
+                  >
+                    {transferTo}
+                  </span>
+                )}
+                {!canChangeTransferTo && (
+                  <span style={{ color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 600 }}>
+                    (Đã thanh toán)
+                  </span>
+                )}
               </div>
-            )}
-            </label>
-            <div className="people-picker">
-              {participants.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className={`people-chip ${transferTo === name ? 'selected' : ''}`}
-                  disabled={!canChangeTransferTo}
-                  onClick={() => handleSetTransferTo(name)}
+
+              {/* Custom Toggle Switch for QR Code */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextState = !Boolean(transferTo && includeQrCode)
+                  if (nextState) {
+                    setIncludeQrCode(true)
+                    if (!transferTo) setTransferTo(defaultTransferTo || participants[0] || '')
+                  } else {
+                    setIncludeQrCode(false)
+                  }
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '5px 12px',
+                  borderRadius: '999px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: (transferTo && includeQrCode) ? '1.5px solid #22C55E' : '1.5px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: (transferTo && includeQrCode) ? '#15803D' : '#64748B',
+                  boxShadow: (transferTo && includeQrCode) ? '0 2px 8px rgba(34, 197, 94, 0.2)' : 'none',
+                  transition: 'all 0.2s ease',
+                  userSelect: 'none',
+                }}
+              >
+                <QrCode size={15} color={(transferTo && includeQrCode) ? '#16A34A' : '#64748B'} />
+                <span>Kèm mã QR Bill</span>
+
+                {/* Switch Indicator */}
+                <span
+                  style={{
+                    width: '32px',
+                    height: '18px',
+                    borderRadius: '999px',
+                    background: (transferTo && includeQrCode) ? '#16A34A' : '#CBD5E1',
+                    position: 'relative',
+                    display: 'inline-block',
+                    transition: 'background 0.2s ease',
+                  }}
                 >
-                  {name}
-                </button>
-              ))}
+                  <span
+                    style={{
+                      width: '14px',
+                      height: '14px',
+                      borderRadius: '50%',
+                      background: '#FFFFFF',
+                      position: 'absolute',
+                      top: '2px',
+                      left: (transferTo && includeQrCode) ? '16px' : '2px',
+                      transition: 'left 0.2s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                    }}
+                  />
+                </span>
+              </button>
             </div>
-            
-            
+
+            <div className="people-picker">
+              {participants.map((name) => {
+                const isSelected = transferTo === name
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    className={`people-chip ${isSelected ? 'selected' : ''}`}
+                    disabled={!canChangeTransferTo}
+                    onClick={() => handleSetTransferTo(name)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    {isSelected && <Check size={14} strokeWidth={3} />}
+                    {name}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <table className="result-table result-table-split">
@@ -769,7 +826,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                     {type.emoji} {type.label}
                   </th>
                 ))}
-                {transferTo && <th style = {{color: 'var(--color-accent)'}}>Chuyển cho {transferTo}</th>}
+                {transferTo && <th style={{ color: 'var(--color-accent)' }}>Chuyển cho {transferTo}</th>}
                 <th>Đánh dấu</th>
               </tr>
             </thead>
@@ -794,7 +851,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                           </span>
                         ) : null}
                       </td>
-                      <td style={{color: 'var(--color-accent-dark)', fontWeight: 600}}>{formatMoney(Math.round(amount * 1000))}</td>
+                      <td style={{ color: 'var(--color-accent-dark)', fontWeight: 600 }}>{formatMoney(Math.round(amount * 1000))}</td>
                       <td style={{ fontWeight: 600, color: 'var(--color-accent-dark)' }}>
                         {badmintonTotals[name] ? formatMoney(Math.round(badmintonTotals[name] * 1000)) : '-'}
                       </td>

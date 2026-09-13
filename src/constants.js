@@ -62,8 +62,12 @@ export function sortPlayerNames(names) {
   )
 }
 
-export function shouldResetPeopleSelection(type) {
+export function isCoreBadmintonType(type) {
   return ['san', 'cau', 'tra-da'].includes(String(type || '').trim())
+}
+
+export function shouldResetPeopleSelection(type) {
+  return !isCoreBadmintonType(type)
 }
 
 export function getSessionPeople(sessions) {

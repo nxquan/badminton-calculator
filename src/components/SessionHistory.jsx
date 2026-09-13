@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, useEffect } from 'react'
+import { Filter, Trash2 } from 'lucide-react'
 import { formatMoney, calculateTotals, getEntryLabel } from '../constants'
 
 function parseSessionDate(dateValue) {
@@ -64,12 +65,7 @@ function getMonthKey(date) {
 
 export default function SessionHistory({ sessions, expenseTypes, onView, onDelete }) {
   const [monthFilter, setMonthFilter] = useState(() => {
-    try {
-      const stored = localStorage.getItem('sessionHistory.monthFilter')
-      return stored !== null ? stored : new Date().toISOString().slice(0, 7)
-    } catch (e) {
-      return new Date().toISOString().slice(0, 7)
-    }
+    return new Date().toISOString().slice(0, 7)
   })
 
   const months = useMemo(() => {
@@ -169,43 +165,44 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
 
   return (
     <div>
+      <div style={{ margin: '8px 16px 14px 16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', flexShrink: 0, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Filter size={14} /> Lọc theo tháng:
+        </label>
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          style={{ minWidth: '150px', maxWidth: '190px', padding: '6px 12px', fontSize: '0.85rem', fontWeight: 600 }}
+        >
+          <option value="">Tất cả các tháng</option>
+          {months.map((m) => (
+            <option key={m} value={m}>{`Tháng ${String(Number(m.slice(5)))} / ${m.slice(0, 4)}`}</option>
+          ))}
+        </select>
+        <div style={{
+          marginLeft: 'auto',
+          padding: '6px 14px',
+          borderRadius: '999px',
+          background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
+          border: '1px solid #86EFAC',
+          fontSize: '0.88rem',
+          fontWeight: 800,
+          color: '#15803D',
+          boxShadow: '0 2px 6px rgba(22, 163, 74, 0.12)',
+        }}>
+          Tổng tháng: {formatMoney(Math.round(monthTotal * 1000))}
+        </div>
+      </div>
+
       {filteredSessions.length === 0 ? (
-        <div className="card">
+        <div className="card" style={{ marginTop: 12 }}>
           <div className="empty-state">
             <p style={{ fontSize: '2rem', marginBottom: '8px' }}>🏸</p>
-            <p>Chưa có phiên đánh nào.</p>
-            <p>Bấm "Phiên đánh mới" để bắt đầu!</p>
+            <p>Chưa có phiên đánh nào {monthFilter ? `trong Tháng ${Number(monthFilter.slice(5))}/${monthFilter.slice(0, 4)}` : ''}.</p>
+            <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: 4 }}>Bấm "Phiên đánh mới" hoặc chọn tháng khác để xem!</p>
           </div>
         </div>
       ) : (
-        <>
-          {/* <div className="card-title">📜 Lịch sử ({sessions.length} phiên)</div> */}
-          <div style={{ margin: '8px 16px 12px 16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', flexShrink: 0 }}>Lọc theo tháng</label>
-            <select
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-              style={{ minWidth: '140px', maxWidth: '180px', padding: '6px 10px', fontSize: '0.85rem' }}
-            >
-              <option value="">Tất cả các tháng</option>
-              {months.map((m) => (
-                <option key={m} value={m}>{`Tháng ${String(Number(m.slice(5)))} / ${m.slice(0,4)}`}</option>
-              ))}
-            </select>
-            <div style={{
-              marginLeft: 'auto',
-              padding: '8px 12px',
-              borderRadius: '999px',
-              background: 'linear-gradient(135deg, #ecfeff 0%, #e0f2fe 100%)',
-              border: '1px solid #7dd3fc',
-              fontSize: '0.9rem',
-              fontWeight: 800,
-              color: '#0f4c81',
-              boxShadow: '0 1px 2px rgba(15, 76, 129, 0.12)',
-            }}>
-              Tổng tháng: {formatMoney(Math.round(monthTotal * 1000))}
-            </div>
-          </div>
           <div className="table-wrap">
             <table className="result-table history-table">
               <thead>
@@ -303,8 +300,9 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                                         onDelete(session.id)
                                       }
                                     }}
+                                    title="Xóa phiên đánh"
                                   >
-                                    <span className="btn-icon" aria-hidden="true">✕</span>
+                                    <Trash2 size={14} />
                                   </button>
                                 )}
                               </td>
@@ -318,7 +316,6 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
               </tbody>
             </table>
           </div>
-        </>
       )}
     </div>
   )
