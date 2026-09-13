@@ -2,9 +2,24 @@ import { useEffect, useId, useMemo, useState, useCallback, useRef, Fragment } fr
 import { createPortal } from 'react-dom'
 import { PLAYERS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames, shouldResetPeopleSelection } from '../constants'
 import PlayerAvatar from './PlayerAvatar'
+import QuickBatchForm from './QuickBatchForm'
 
-function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName, customName, onCustomNameChange }) {
+function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName, customName, onCustomNameChange, badmintonPlayers = [] }) {
   const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
+  const targetBadmintonPlayers = useMemo(() => {
+    if (badmintonPlayers && badmintonPlayers.length > 0) return badmintonPlayers
+    return sortedPlayers.map((p) => p.id)
+  }, [badmintonPlayers, sortedPlayers])
+
+  const isBadmintonActive = useMemo(() => {
+    return targetBadmintonPlayers.length > 0 &&
+      targetBadmintonPlayers.every((id) => selected.includes(id)) &&
+      selected.every((id) => targetBadmintonPlayers.includes(id))
+  }, [targetBadmintonPlayers, selected])
+
+  const handleBadmintonToggle = () => {
+    onToggle(isBadmintonActive ? [] : [...targetBadmintonPlayers])
+  }
   const [isNameDropdownOpen, setIsNameDropdownOpen] = useState(false)
   const [highlightedNameIndex, setHighlightedNameIndex] = useState(0)
   const customInputRef = useRef(null)
@@ -230,6 +245,13 @@ function PeoplePicker({ selected, onToggle, players = [], combos = [], onAddName
       </div>
 
       <div className="select-actions">
+        <button
+          type="button"
+          className={`btn btn-sm ${isBadmintonActive ? 'btn-primary' : 'btn-outline'}`}
+          onClick={handleBadmintonToggle}
+        >
+          🏸 Tham gia chơi cầu
+        </button>
         {(sortedCombos || []).map((combo) => (
           <button
             key={combo.label}
@@ -612,7 +634,7 @@ function PayerPicker({ value, players = [], onSelect }) {
 }
 
 
-function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names = [], expenseTypes, combos = [], onAddName, onAddExpenseType, onAdded }) {
+function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names = [], expenseTypes, combos = [], badmintonPlayers = [], onAddName, onAddExpenseType, onAdded }) {
   const [type, setType] = useState(lastType)
   const [hours, setHours] = useState(type === 'san' ? '2' : '')
   const [amount, setAmount] = useState(type === 'san' ? 240 : '')
@@ -786,6 +808,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
           onAddName={onAddName}
           customName={customName}
           onCustomNameChange={setCustomName}
+          badmintonPlayers={badmintonPlayers}
         />
       </div>
 
@@ -806,7 +829,7 @@ function EntryForm({ onAdd, lastPeople, lastPayer, lastType, players = [], names
   )
 }
 
-function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddName, onSave, onCancel }) {
+function EditEntryForm({ entry, players = [], expenseTypes, combos = [], badmintonPlayers = [], onAddName, onSave, onCancel }) {
   const [type, setType] = useState(entry.type)
   const [hours, setHours] = useState(entry.hours ? String(entry.hours) : '')
   const [amount, setAmount] = useState(String(entry.amount))
@@ -958,7 +981,7 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], onAddNa
         <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
           Người tham gia
         </label>
-        <PeoplePicker selected={people} onToggle={setPeople} players={players} combos={combos} onAddName={onAddName} customName={customName} onCustomNameChange={setCustomName} />
+        <PeoplePicker selected={people} onToggle={setPeople} players={players} combos={combos} onAddName={onAddName} customName={customName} onCustomNameChange={setCustomName} badmintonPlayers={badmintonPlayers} />
       </div>
 
       <div className="actions-bar">
@@ -984,6 +1007,9 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
   const [entries, setEntries] = useState(session.entries || [])
   const [editingEntry, setEditingEntry] = useState(null)
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false)
+  const [showQuickBuilder, setShowQuickBuilder] = useState(() => (session.entries || []).length === 0)
+  const [sessionCustomName, setSessionCustomName] = useState('')
+  const [isPeopleExpanded, setIsPeopleExpanded] = useState(false)
   const [lastPeople, setLastPeople] = useState(() => {
     const existingCore = (session.entries || []).find((e) => ['san', 'cau', 'tra-da'].includes(e.type) && Array.isArray(e.people) && e.people.length > 0)
     if (existingCore) return existingCore.people
@@ -1008,6 +1034,18 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
     }
   }, [players])
   const [lastType, setLastType] = useState('san')
+
+  const badmintonPlayers = useMemo(() => {
+    // Ưu tiên lấy danh sách người tham gia từ Tiền cầu ('cau')
+    const cauEntry = (entries || []).find((e) => e.type === 'cau' && Array.isArray(e.people) && e.people.length > 0)
+    if (cauEntry) return cauEntry.people
+
+    // Nếu chưa có Tiền cầu, lấy từ Tiền sân ('san')
+    const sanEntry = (entries || []).find((e) => e.type === 'san' && Array.isArray(e.people) && e.people.length > 0)
+    if (sanEntry) return sanEntry.people
+
+    return lastPeople
+  }, [entries, lastPeople])
 
   const handleAddEntry = useCallback((entry) => {
     setLastPeople(entry.people)
@@ -1378,28 +1416,138 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
 
   return (
     <div>
-      <div className="card">
-        <div className="card-title">📅 Phiên đánh cầu</div>
-        <DateField id={dateInputId} value={date} onChange={setDate} />
+      <div className="card" style={{ marginBottom: '16px' }}>
+        <div className="card-title" style={{ marginBottom: '10px' }}>📅 Thiết lập chung phiên đánh</div>
+        <div className="form-row" style={{ alignItems: 'flex-start', marginBottom: '10px' }}>
+          <div className="form-group" style={{ flex: '0 0 auto', minWidth: '170px' }}>
+            <DateField id={dateInputId} value={date} onChange={setDate} />
+          </div>
+          <div className="form-group" style={{ flex: '0 0 220px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Người trả chính (mặc định)</label>
+            <PayerPicker value={lastPayer} players={players} onSelect={setLastPayer} />
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+              👥 Người tham gia buổi đánh ({lastPeople.length} người):
+            </label>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {(combos || []).map((combo) => {
+                const memberIds = (combo.members || []).map((m) => {
+                  const p = players.find((pl) => pl.id === m || pl.name === m)
+                  return p ? p.id : m
+                })
+                const isActive = memberIds.length > 0 && memberIds.every((id) => lastPeople.includes(id)) && lastPeople.every((id) => memberIds.includes(id))
+                return (
+                  <button
+                    key={combo.label}
+                    type="button"
+                    className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline'}`}
+                    style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                    onClick={() => setLastPeople(isActive ? [] : [...memberIds])}
+                  >
+                    {combo.emoji} {combo.label}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                onClick={() => setIsPeopleExpanded((v) => !v)}
+              >
+                {isPeopleExpanded ? '▲ Thu gọn' : '✏️ Chọn chi tiết / Thêm mới'}
+              </button>
+            </div>
+          </div>
+
+          {isPeopleExpanded ? (
+            <PeoplePicker
+              selected={lastPeople}
+              onToggle={setLastPeople}
+              players={players}
+              combos={combos}
+              onAddName={onAddPlayerName}
+              customName={sessionCustomName}
+              onCustomNameChange={setSessionCustomName}
+              badmintonPlayers={badmintonPlayers}
+            />
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px 10px', background: 'var(--color-bg-app)', borderRadius: '8px', border: '1px solid var(--border)', minHeight: '38px', alignItems: 'center' }}>
+              {lastPeople.length === 0 ? (
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Chưa chọn người tham gia nào. Vui lòng chọn Combo ở trên hoặc bấm "✏️ Chọn chi tiết".</span>
+              ) : (
+                lastPeople.map((id) => {
+                  const playerObj = players.find((p) => p.id === id)
+                  const name = playerObj ? playerObj.name : id
+                  return (
+                    <span
+                      key={id}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        background: 'var(--card-bg)',
+                        border: '1px solid var(--border)',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: 'var(--primary)',
+                      }}
+                    >
+                      <PlayerAvatar player={playerObj || { id, name }} size={16} />
+                      <span>{name}</span>
+                    </span>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
+      {showQuickBuilder && (
+        <QuickBatchForm
+          defaultPayer={lastPayer}
+          defaultPeople={lastPeople}
+          players={players}
+          expenseTypes={expenseTypes}
+          badmintonPlayers={badmintonPlayers}
+          onApplyEntries={(batchEntries) => {
+            setEntries((prev) => [...prev, ...batchEntries])
+            setShowQuickBuilder(false)
+          }}
+        />
+      )}
+
       <div className="card">
-        <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          📋 Danh sách chi phí ({entries.length} khoản)
-          <button type="button" className="btn btn-primary"  onClick={() => setIsEntryModalOpen(true)}>
-          + Thêm khoản chi
-          </button>
+        <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span>📋 Danh sách chi phí ({entries.length} khoản)</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              className={`btn btn-sm ${showQuickBuilder ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setShowQuickBuilder((v) => !v)}
+            >
+              {showQuickBuilder ? '▲ Ẩn nhập nhanh' : '⚡ Nhập nhanh đồng loạt'}
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsEntryModalOpen(true)}>
+              + Thêm lẻ khoản chi
+            </button>
+          </div>
         </div>
         
         <div className="table-wrap">
           <table className="result-table">
             <colgroup>
-              <col style={{ width: '200px' }} />
-              <col style={{ width: '24px' }} />
-              <col style={{ width: '92px' }} />
+              <col style={{ width: '160px' }} />
+              <col style={{ width: '120px' }} />
+              <col style={{ width: '100px' }} />
               <col />
-              {/* <col style={{ width: '84px' }} /> */}
-              <col style={{ width: '72px' }} />
+              <col style={{ width: '80px' }} />
             </colgroup>
             <thead>
               <tr>
@@ -1617,6 +1765,7 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
                 players={players}
                 expenseTypes={expenseTypes}
                 combos={combos}
+                badmintonPlayers={badmintonPlayers}
                 onAddName={onAddPlayerName}
                 onAddExpenseType={onAddExpenseType}
               />
@@ -1664,6 +1813,7 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
                 players={players}
                 expenseTypes={expenseTypes}
                 combos={combos}
+                badmintonPlayers={badmintonPlayers}
                 onAddName={onAddPlayerName}
                 onSave={handleUpdateEntry}
                 onCancel={() => setEditingEntry(null)}
