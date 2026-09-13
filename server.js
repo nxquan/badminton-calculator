@@ -13,58 +13,91 @@ const PORT = process.env.PORT || 3002
 app.use(cors())
 app.use(express.json())
 
-// Kết nối MongoDB
+// Kết nối MongoDB — chạy nền, không chặn server khởi động (tránh crash khi cluster bị pause/mất mạng)
 const client = new MongoClient(process.env.MONGODB_URI)
-await client.connect()
 const db = client.db('badminton')
 const sessions = db.collection('sessions')
 const players = db.collection('players')
 const expenseTypes = db.collection('expense_types')
 const combos = db.collection('combos')
 
-// Keep one document per app-level session id and enforce uniqueness for future writes.
-try {
-  const duplicates = await sessions.aggregate([
-    { $match: { id: { $exists: true, $ne: null } } },
-    {
-      $group: {
-        _id: '$id',
-        docs: {
-          $push: {
-            _id: '$_id',
-            createdAt: '$createdAt',
+let isDbConnected = false
+
+// Chặn request tới database khi chưa kết nối được, trả lỗi rõ ràng thay vì crash/treo
+app.use('/api', (req, res, next) => {
+  if (!isDbConnected) {
+    return res.status(503).json({ error: 'Không thể kết nối cơ sở dữ liệu (MongoDB có thể đang bị pause). Vui lòng thử lại sau.' })
+  }
+  next()
+})
+
+async function cleanupDuplicateSessions() {
+  // Keep one document per app-level session id and enforce uniqueness for future writes.
+  try {
+    const duplicates = await sessions.aggregate([
+      { $match: { id: { $exists: true, $ne: null } } },
+      {
+        $group: {
+          _id: '$id',
+          docs: {
+            $push: {
+              _id: '$_id',
+              createdAt: '$createdAt',
+            },
           },
+          count: { $sum: 1 },
         },
-        count: { $sum: 1 },
       },
-    },
-    { $match: { count: { $gt: 1 } } },
-  ]).toArray()
+      { $match: { count: { $gt: 1 } } },
+    ]).toArray()
 
-  let removedCount = 0
-  for (const dup of duplicates) {
-    const sorted = (dup.docs || []).slice().sort((a, b) => {
-      const ta = Date.parse(String(a.createdAt || '')) || 0
-      const tb = Date.parse(String(b.createdAt || '')) || 0
-      return tb - ta
-    })
-    const removeIds = sorted.slice(1).map((d) => d._id)
-    if (removeIds.length > 0) {
-      const result = await sessions.deleteMany({ _id: { $in: removeIds } })
-      removedCount += result.deletedCount || 0
+    let removedCount = 0
+    for (const dup of duplicates) {
+      const sorted = (dup.docs || []).slice().sort((a, b) => {
+        const ta = Date.parse(String(a.createdAt || '')) || 0
+        const tb = Date.parse(String(b.createdAt || '')) || 0
+        return tb - ta
+      })
+      const removeIds = sorted.slice(1).map((d) => d._id)
+      if (removeIds.length > 0) {
+        const result = await sessions.deleteMany({ _id: { $in: removeIds } })
+        removedCount += result.deletedCount || 0
+      }
     }
-  }
 
-  if (removedCount > 0) {
-    console.log(`🧹 Removed duplicate sessions: ${removedCount}`)
-  }
+    if (removedCount > 0) {
+      console.log(`🧹 Removed duplicate sessions: ${removedCount}`)
+    }
 
-  await sessions.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $exists: true, $ne: null } } })
-} catch (e) {
-  console.error('Session dedupe/index setup warning:', e.message)
+    await sessions.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $exists: true, $ne: null } } })
+  } catch (e) {
+    console.error('Session dedupe/index setup warning:', e.message)
+  }
 }
 
-console.log('✅ Kết nối MongoDB thành công')
+// Thử kết nối liên tục với backoff, không throw để không làm crash tiến trình
+async function connectWithRetry(delayMs = 5000, maxDelayMs = 60000) {
+  while (!isDbConnected) {
+    try {
+      await client.connect()
+      isDbConnected = true
+      console.log('✅ Kết nối MongoDB thành công')
+      await cleanupDuplicateSessions()
+    } catch (err) {
+      console.error(`❌ Kết nối MongoDB thất bại: ${err.message}. Thử lại sau ${delayMs / 1000}s...`)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+      delayMs = Math.min(delayMs * 2, maxDelayMs)
+    }
+  }
+}
+
+client.on('close', () => {
+  isDbConnected = false
+  console.error('⚠️ Mất kết nối MongoDB, sẽ tự kết nối lại...')
+  connectWithRetry()
+})
+
+connectWithRetry()
 
 // ── API routes ──────────────────────────────────────────────
 
