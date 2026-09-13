@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react'
 import SessionForm from './components/SessionForm'
 import Sidebar from './components/Sidebar'
 import * as mongoApi from './services/mongoApi'
-import { DEFAULT_EXPENSE_TYPES, getSessionPeople, sortExpenseTypes, sortPlayerNames, loadCombos } from './constants'
+import { DEFAULT_EXPENSE_TYPES, getSessionPeople, sortExpenseTypes, sortPlayerNames, loadCombos, createPlayerResolver } from './constants'
 import 'react-toastify/dist/ReactToastify.css'
 // Page imports
 import HomePage from './pages/HomePage'
@@ -675,25 +675,13 @@ export default function App() {
     const playerNames = sortPlayerNames(players.map((p) => p.name))
     const stats = {}
     for (const name of playerNames) {
-      stats[name] = { total: 0, avgPerMonth: 0 }
+      stats[name] = { total: 0, avgPerMonth: 0, totalSpent: 0, participationRate: 0, totalSessions: 0 }
     }
 
     if (!sessions || sessions.length === 0) return stats
+    const totalSessions = sessions.length
 
-    const idToName = new Map((players || []).map((p) => [String(p.id), String(p.name || '')]))
-    const resolveParticipantName = (value) => {
-      if (!value && value !== 0) return ''
-      if (typeof value === 'object') {
-        const rawId = value.id != null ? String(value.id) : ''
-        const rawName = String(value.name || '').trim()
-        if (rawId && idToName.has(rawId)) return idToName.get(rawId)
-        if (rawName) return rawName
-        return rawId
-      }
-      const raw = String(value).trim()
-      if (!raw) return ''
-      return idToName.get(raw) || raw
-    }
+    const resolveParticipantName = createPlayerResolver(players)
 
     // compute date span in months (inclusive)
     const dates = sessions
@@ -707,24 +695,47 @@ export default function App() {
     })()
 
     for (const session of sessions) {
-      const participants = new Set()
-      ;(session.entries || []).forEach((entry) => {
-        const payerName = resolveParticipantName(entry.payer)
-        if (payerName) participants.add(payerName)
-        ;(entry.people || []).forEach((p) => {
-          const name = resolveParticipantName(p)
-          if (name) participants.add(name)
-        })
-      })
+      const sessionParticipants = new Set()
 
-      for (const name of Object.keys(stats)) {
-        if (participants.has(name)) stats[name].total += 1
+      for (const entry of session.entries || []) {
+        const payerName = resolveParticipantName(entry.payer)
+        if (payerName) sessionParticipants.add(payerName)
+
+        const people = Array.isArray(entry.people) ? entry.people : []
+        const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
+        const shareCount = people.length
+
+        for (let i = 0; i < shareCount; i++) {
+          const rawPerson = people[i]
+          const pName = resolveParticipantName(rawPerson)
+          if (pName) {
+            sessionParticipants.add(pName)
+            if (entry.amount && Number(entry.amount) > 0) {
+              const share = amounts.length === shareCount ? Number(amounts[i]) : Number(entry.amount) / shareCount
+              if (Number.isFinite(share) && share > 0) {
+                if (!stats[pName]) {
+                  stats[pName] = { total: 0, avgPerMonth: 0, totalSpent: 0, participationRate: 0, totalSessions: 0 }
+                }
+                stats[pName].totalSpent += share
+              }
+            }
+          }
+        }
+      }
+
+      for (const name of sessionParticipants) {
+        if (!stats[name]) {
+          stats[name] = { total: 0, avgPerMonth: 0, totalSpent: 0, participationRate: 0, totalSessions: 0 }
+        }
+        stats[name].total += 1
       }
     }
 
     for (const name of Object.keys(stats)) {
       const total = stats[name].total || 0
       stats[name].avgPerMonth = monthsSpan > 0 ? Number((total / monthsSpan).toFixed(1)) : 0
+      stats[name].participationRate = totalSessions > 0 ? Number(((total / totalSessions) * 100).toFixed(1)) : 0
+      stats[name].totalSessions = totalSessions
     }
 
     return stats
@@ -749,12 +760,6 @@ export default function App() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            <button
-              className="btn btn-add btn-sm"
-              onClick={handleNewSession}
-            >
-              <Plus size={16} /> Tạo phiên mới
-            </button>
             <a href="https://github.com/nxquan/badminton-calculator" target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg> GitHub
             </a>

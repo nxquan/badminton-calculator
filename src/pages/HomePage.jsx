@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Calendar, Wallet, Users, Flame, BarChart3, ArrowRight, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Calendar, Wallet, Users, Flame, BarChart3, ArrowRight, Search, ChevronDown, ChevronUp, PieChart } from 'lucide-react'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -13,7 +13,7 @@ import {
   Legend,
 } from 'recharts'
 import PlayerAvatar from '../components/PlayerAvatar'
-import { formatMoney } from '../constants'
+import { formatMoney, createPlayerResolver } from '../constants'
 
 function formatMonthTitle(ym) {
   if (!ym) return ''
@@ -63,6 +63,8 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
   const [playerSearchTerm, setPlayerSearchTerm] = useState('')
   const [playerFilterPill, setPlayerFilterPill] = useState('all')
   const [visiblePlayerCount, setVisiblePlayerCount] = useState(5)
+
+  const resolvePlayerName = useMemo(() => createPlayerResolver(players), [players])
 
   // 1. Calculate Continuous Monthly Data for Chart (Includes months with 0 sessions)
   const monthlyData = useMemo(() => {
@@ -160,8 +162,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
 
   // 3. Calculate Player Statistics (Spent share & Sessions count)
   const playerStats = useMemo(() => {
-    const idToPlayer = Object.fromEntries(players.map((p) => [p.id, p]))
-    const nameToPlayer = Object.fromEntries(players.map((p) => [p.name, p]))
+    const nameToPlayerMap = Object.fromEntries(players.map((p) => [p.name, p]))
 
     const statsMap = {}
 
@@ -169,54 +170,103 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
       statsMap[p.name] = { player: p, name: p.name, totalSpent: 0, sessionCount: 0, sessionsSet: new Set() }
     }
 
-    for (const session of sessions) {
+    sessions.forEach((session, sIdx) => {
+      const sId = session.id || session._id || `s_${sIdx}`
       const sessionParticipants = new Set()
 
       for (const entry of session.entries || []) {
-        if (!entry.people || entry.people.length === 0 || !entry.amount) continue
+        if (entry.payer) {
+          const payerName = resolvePlayerName(entry.payer)
+          if (payerName) sessionParticipants.add(payerName)
+        }
+
+        const people = Array.isArray(entry.people) ? entry.people : []
         const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
-        const shareCount = entry.people.length
+        const shareCount = people.length
 
         for (let i = 0; i < shareCount; i++) {
-          const rawPerson = entry.people[i]
-          const share = amounts.length === shareCount ? Number(amounts[i]) : entry.amount / shareCount
-          if (!Number.isFinite(share) || share <= 0) continue
-
-          let pName = ''
-          let pObj = null
-          if (rawPerson && typeof rawPerson === 'object') {
-            pName = rawPerson.name || rawPerson.id
-            pObj = idToPlayer[rawPerson.id] || nameToPlayer[pName]
-          } else {
-            pName = idToPlayer[rawPerson]?.name || String(rawPerson)
-            pObj = idToPlayer[rawPerson] || nameToPlayer[pName]
-          }
-
+          const rawPerson = people[i]
+          const pName = resolvePlayerName(rawPerson)
           if (!pName) continue
 
-          if (!statsMap[pName]) {
-            statsMap[pName] = { player: pObj || { id: pName, name: pName }, name: pName, totalSpent: 0, sessionCount: 0, sessionsSet: new Set() }
-          }
-
-          statsMap[pName].totalSpent += share
           sessionParticipants.add(pName)
+
+          if (entry.amount && Number(entry.amount) > 0) {
+            const share = amounts.length === shareCount ? Number(amounts[i]) : Number(entry.amount) / shareCount
+            if (Number.isFinite(share) && share > 0) {
+              if (!statsMap[pName]) {
+                const pObj = nameToPlayerMap[pName] || { id: pName, name: pName }
+                statsMap[pName] = { player: pObj, name: pName, totalSpent: 0, sessionCount: 0, sessionsSet: new Set() }
+              }
+              statsMap[pName].totalSpent += share
+            }
+          }
         }
       }
 
       sessionParticipants.forEach((pName) => {
-        if (statsMap[pName]) {
-          statsMap[pName].sessionsSet.add(session.id)
+        if (!statsMap[pName]) {
+          const pObj = nameToPlayerMap[pName] || { id: pName, name: pName }
+          statsMap[pName] = { player: pObj, name: pName, totalSpent: 0, sessionCount: 0, sessionsSet: new Set() }
         }
+        statsMap[pName].sessionsSet.add(sId)
       })
-    }
+    })
 
-    const result = Object.values(statsMap).map((item) => ({
-      ...item,
-      sessionCount: item.sessionsSet.size,
-    })).sort((a, b) => b.totalSpent - a.totalSpent)
+    const totalClubSessions = sessions.length
+    const result = Object.values(statsMap).map((item) => {
+      const sessionCount = item.sessionsSet.size
+      const participationRate = totalClubSessions > 0 ? (sessionCount / totalClubSessions) * 100 : 0
+      return {
+        ...item,
+        sessionCount,
+        participationRate,
+      }
+    }).sort((a, b) => b.totalSpent - a.totalSpent)
 
     return result
-  }, [sessions, players])
+  }, [sessions, players, resolvePlayerName])
+
+  // 4. Calculate Breakdown by Expense Type (Category Total & Share %)
+  const expenseTypeBreakdown = useMemo(() => {
+    const totalsMap = {}
+    let grandTotal = 0
+
+    for (const session of sessions || []) {
+      for (const entry of session.entries || []) {
+        const amt = Number(entry.amount) || 0
+        if (amt <= 0) continue
+        const typeKey = entry.type || 'khac'
+        totalsMap[typeKey] = (totalsMap[typeKey] || 0) + amt
+        grandTotal += amt
+      }
+    }
+
+    const typeMetaMap = Object.fromEntries(
+      (expenseTypes || []).map((t) => [t.value, t])
+    )
+
+    const list = Object.entries(totalsMap).map(([typeKey, totalAmt]) => {
+      const meta = typeMetaMap[typeKey] || {
+        value: typeKey,
+        label: typeKey,
+        emoji: '🧾',
+      }
+      const percentage = grandTotal > 0 ? (totalAmt / grandTotal) * 100 : 0
+      return {
+        typeKey,
+        label: meta.label || typeKey,
+        emoji: meta.emoji || '🧾',
+        totalAmt,
+        totalVND: Math.round(totalAmt * 1000),
+        percentage,
+      }
+    })
+
+    list.sort((a, b) => b.totalAmt - a.totalAmt)
+
+    return { list, grandTotal, grandTotalVND: Math.round(grandTotal * 1000) }
+  }, [sessions, expenseTypes])
 
   const maxPlayerSpent = useMemo(() => {
     return Math.max(...playerStats.map((p) => p.totalSpent), 1)
@@ -411,6 +461,108 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
         )}
       </div>
 
+      {/* Category Expense Breakdown Section */}
+      <div className="card">
+        <div className="card-title" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <PieChart size={20} style={{ color: '#16A34A' }} /> Cơ cấu Kinh phí theo Loại khoản chi
+          </span>
+          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#15803D', background: '#F0FDF4', padding: '4px 12px', borderRadius: 999, border: '1px solid #BBF7D0' }}>
+            Tổng: {formatMoney(expenseTypeBreakdown.grandTotalVND)}
+          </div>
+        </div>
+
+        {expenseTypeBreakdown.list.length === 0 ? (
+          <div className="empty-state">
+            <p>Chưa có dữ liệu kinh phí theo loại khoản chi.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Multi-segmented visual progress bar */}
+            <div style={{ width: '100%', height: 12, background: '#F1F5F9', borderRadius: 999, overflow: 'hidden', display: 'flex' }}>
+              {expenseTypeBreakdown.list.map((item, idx) => {
+                const colorPalette = ['#16A34A', '#2563EB', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B']
+                const color = colorPalette[idx % colorPalette.length]
+                return (
+                  <div
+                    key={item.typeKey}
+                    title={`${item.emoji} ${item.label}: ${formatMoney(item.totalVND)} (${item.percentage.toFixed(1)}%)`}
+                    style={{
+                      width: `${item.percentage}%`,
+                      height: '100%',
+                      background: color,
+                      transition: 'width 0.4s ease',
+                    }}
+                  />
+                )
+              })}
+            </div>
+
+            {/* Grid list of expense category cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              {expenseTypeBreakdown.list.map((item, idx) => {
+                const colorPalette = [
+                  { bg: '#F0FDF4', border: '#BBF7D0', text: '#15803D', bar: '#16A34A' },
+                  { bg: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8', bar: '#2563EB' },
+                  { bg: '#FEF3C7', border: '#FDE68A', text: '#B45309', bar: '#F59E0B' },
+                  { bg: '#F3E8FF', border: '#E9D5FF', text: '#6B21A8', bar: '#8B5CF6' },
+                  { bg: '#FCE7F3', border: '#FBCFE8', text: '#9D174D', bar: '#EC4899' },
+                  { bg: '#CFFAFE', border: '#A5F3FC', text: '#0E7490', bar: '#06B6D4' },
+                ]
+                const theme = colorPalette[idx % colorPalette.length]
+
+                return (
+                  <div key={item.typeKey} style={{
+                    background: theme.bg,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0F172A', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: '1.1rem' }}>{item.emoji}</span> {item.label}
+                      </span>
+                      <span style={{
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: '#FFFFFF',
+                        color: theme.text,
+                        border: `1px solid ${theme.border}`
+                      }}>
+                        {item.percentage.toFixed(1)}%
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontSize: '1.1rem', fontWeight: 800, color: theme.text }}>
+                        {formatMoney(item.totalVND)}
+                      </span>
+                    </div>
+
+                    {/* Progress bar per item */}
+                    <div style={{ width: '100%', height: 4, background: 'rgba(255, 255, 255, 0.7)', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${item.percentage}%`,
+                        height: '100%',
+                        background: theme.bar,
+                        borderRadius: 999,
+                        transition: 'width 0.4s ease'
+                      }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Per-Player Spending & Attendance Breakdown */}
       <div className="card">
         <div className="card-title" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -494,6 +646,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {displayedPlayerStats.map((item, idx) => {
                 const percentage = Math.round((item.totalSpent / maxPlayerSpent) * 100)
+                const rate = item.participationRate || 0
                 return (
                   <div key={item.name} style={{
                     padding: '12px 16px',
@@ -509,10 +662,22 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                         <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#64748B', width: 22 }}>
                           {idx + 1}.
                         </span>
-                        <PlayerAvatar player={item.player} size={36} />
+                        <PlayerAvatar player={item.player} size={38} />
                         <div>
                           <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A' }}>{item.name}</div>
-                          <div style={{ fontSize: '0.78rem', color: '#64748B' }}>🏸 {item.sessionCount} phiên tham gia</div>
+                          <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+                            <span>🏸 {item.sessionCount}/{sessions.length} phiên</span>
+                            <span style={{
+                              fontWeight: 700,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: rate >= 75 ? '#DCFCE7' : rate >= 40 ? '#FEF9C3' : '#F1F5F9',
+                              color: rate >= 75 ? '#15803D' : rate >= 40 ? '#854D0E' : '#475569',
+                              fontSize: '0.72rem'
+                            }}>
+                              {rate.toFixed(1)}% tham gia
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>

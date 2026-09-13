@@ -56,6 +56,40 @@ export function expenseTypeValueFromLabel(label) {
     .replace(/^-+|-+$/g, '') || 'chi-phi-moi'
 }
 
+export function normalizeStr(str) {
+  return String(str || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+}
+
+export function createPlayerResolver(players = []) {
+  const map = new Map()
+  for (const p of players) {
+    if (!p) continue
+    const canonical = String(p.name || '').trim()
+    if (!canonical) continue
+    if (p.id != null) map.set(String(p.id), canonical)
+    map.set(canonical.toLowerCase(), canonical)
+    map.set(normalizeStr(canonical), canonical)
+  }
+
+  return function resolvePlayerName(value) {
+    if (!value && value !== 0) return ''
+    let key = value
+    if (value && typeof value === 'object') {
+      key = value.id != null ? String(value.id) : (value.name || '')
+    }
+    const str = String(key).trim()
+    if (!str) return ''
+    if (map.has(str)) return map.get(str)
+    if (map.has(str.toLowerCase())) return map.get(str.toLowerCase())
+    if (map.has(normalizeStr(str))) return map.get(normalizeStr(str))
+    return str
+  }
+}
+
 export function sortPlayerNames(names) {
   return [...new Set(names.map((name) => String(name || '').trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, 'vi', { sensitivity: 'base' })

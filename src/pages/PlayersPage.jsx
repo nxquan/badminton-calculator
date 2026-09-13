@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Users, Search, Plus, Pencil, Trash2, ArrowUpDown, Trophy, Activity } from 'lucide-react'
+import { Users, Search, Plus, Pencil, Trash2, ArrowUpDown, Trophy, Activity, Wallet } from 'lucide-react'
 import PlayerAvatar from '../components/PlayerAvatar'
+import { formatMoney } from '../constants'
 
 export default function PlayersPage({ 
   players = [],
@@ -11,7 +12,7 @@ export default function PlayersPage({
   sessions = [],
 }) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState('name-asc') // 'name-asc', 'name-desc', 'games-desc', 'avg-desc'
+  const [sortBy, setSortBy] = useState('rate-desc') // 'rate-desc', 'spent-desc', 'games-desc', 'avg-desc', 'name-asc', 'name-desc'
   const [filterActivity, setFilterActivity] = useState('all') // 'all', 'active', 'inactive'
 
   // Map players used in sessions
@@ -43,6 +44,8 @@ export default function PlayersPage({
     return { usedPlayerIds: ids, usedPlayerNames: names }
   }, [sessions])
 
+  const totalClubSessions = useMemo(() => sessions.length, [sessions])
+
   // Filter and sort players
   const processedPlayers = useMemo(() => {
     let result = [...players]
@@ -68,7 +71,19 @@ export default function PlayersPage({
       const totalB = statsB.total || 0
       const avgA = statsA.avgPerMonth || 0
       const avgB = statsB.avgPerMonth || 0
+      const rateA = statsA.participationRate || (totalClubSessions > 0 ? (totalA / totalClubSessions) * 100 : 0)
+      const rateB = statsB.participationRate || (totalClubSessions > 0 ? (totalB / totalClubSessions) * 100 : 0)
+      const spentA = statsA.totalSpent || 0
+      const spentB = statsB.totalSpent || 0
 
+      if (sortBy === 'rate-desc') {
+        if (rateB !== rateA) return rateB - rateA
+        return String(a.name || '').localeCompare(String(b.name || ''), 'vi', { sensitivity: 'base' })
+      }
+      if (sortBy === 'spent-desc') {
+        if (spentB !== spentA) return spentB - spentA
+        return String(a.name || '').localeCompare(String(b.name || ''), 'vi', { sensitivity: 'base' })
+      }
       if (sortBy === 'games-desc') {
         if (totalB !== totalA) return totalB - totalA
         return String(a.name || '').localeCompare(String(b.name || ''), 'vi', { sensitivity: 'base' })
@@ -85,7 +100,7 @@ export default function PlayersPage({
     })
 
     return result
-  }, [players, playerStats, searchTerm, sortBy, filterActivity])
+  }, [players, playerStats, searchTerm, sortBy, filterActivity, totalClubSessions])
 
   // Count active vs inactive
   const activeCount = useMemo(() => players.filter((p) => (playerStats?.[p.name]?.total || 0) > 0).length, [players, playerStats])
@@ -190,12 +205,14 @@ export default function PlayersPage({
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              style={{ minWidth: 160, padding: '6px 10px', fontSize: '0.85rem', fontWeight: 600 }}
+              style={{ minWidth: 180, padding: '6px 10px', fontSize: '0.85rem', fontWeight: 600 }}
             >
+              <option value="rate-desc">📊 Tỉ lệ % tham gia cao nhất</option>
+              <option value="spent-desc">💵 Chi tiêu nhiều nhất</option>
+              <option value="games-desc">🏸 Số phiên nhiều nhất</option>
+              <option value="avg-desc">📈 Tần suất /tháng cao nhất</option>
               <option value="name-asc">🔤 Tên A ➔ Z</option>
               <option value="name-desc">🔤 Tên Z ➔ A</option>
-              <option value="games-desc">🏸 Số trận nhiều nhất</option>
-              <option value="avg-desc">📈 Tần suất /tháng cao nhất</option>
             </select>
           </div>
         </div>
@@ -217,19 +234,21 @@ export default function PlayersPage({
               const stats = playerStats?.[p.name] || {}
               const totalGames = stats.total || 0
               const avgMonth = stats.avgPerMonth ?? 0
+              const totalSpent = stats.totalSpent || 0
+              const participationRate = totalClubSessions > 0 ? (totalGames / totalClubSessions) * 100 : (stats.participationRate || 0)
               const isActive = totalGames > 0
 
               // Determine if player has participated in any session
               const isUsedInSessions = totalGames > 0 || usedPlayerIds.has(p.id) || usedPlayerNames.has(String(p.name || '').toLowerCase())
 
-              // Top 3 badges when sorted by games
-              const isTopRanked = sortBy === 'games-desc' && idx < 3 && totalGames > 0
+              // Top 3 badges when sorted by rate/games/spent
+              const isTopRanked = (sortBy === 'rate-desc' || sortBy === 'games-desc' || sortBy === 'spent-desc') && idx < 3 && totalGames > 0
 
               return (
                 <div key={p.id} style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
+                  flexDirection: 'column',
+                  gap: 10,
                   padding: 14,
                   background: isTopRanked ? '#F0FDF4' : '#FFFFFF',
                   border: isTopRanked ? '1.5px solid #86EFAC' : '1px solid #E2E8F0',
@@ -238,50 +257,70 @@ export default function PlayersPage({
                   transition: 'all 0.2s ease',
                   position: 'relative'
                 }}>
-                  <PlayerAvatar player={p} size={46} />
-                  
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-                      <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {p.name}
-                      </span>
-                      {isTopRanked && (
-                        <span style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 800,
-                          padding: '1px 6px',
-                          borderRadius: 999,
-                          background: idx === 0 ? '#FEF3C7' : idx === 1 ? '#F1F5F9' : '#FFEDD5',
-                          color: idx === 0 ? '#B45309' : idx === 1 ? '#475569' : '#C2410C',
-                          border: '1px solid currentColor',
-                          flexShrink: 0
-                        }}>
-                          {idx === 0 ? '🥇 #1' : idx === 1 ? '🥈 #2' : '🥉 #3'}
+                  {/* Top Section: Avatar, Name & Actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <PlayerAvatar player={p} size={44} />
+                    
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {p.name}
                         </span>
-                      )}
+                        {isTopRanked && (
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 800,
+                            padding: '1px 6px',
+                            borderRadius: 999,
+                            background: idx === 0 ? '#FEF3C7' : idx === 1 ? '#F1F5F9' : '#FFEDD5',
+                            color: idx === 0 ? '#B45309' : idx === 1 ? '#475569' : '#C2410C',
+                            border: '1px solid currentColor',
+                            flexShrink: 0
+                          }}>
+                            {idx === 0 ? '🥇 #1' : idx === 1 ? '🥈 #2' : '🥉 #3'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: totalSpent > 0 ? '#16A34A' : '#94A3B8', marginTop: 2 }}>
+                        {totalSpent > 0 ? formatMoney(Math.round(totalSpent * 1000)) : 'Chưa có chi tiêu'}
+                      </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: '0.78rem', color: '#64748B' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: isActive ? 700 : 500, color: isActive ? '#15803D' : '#94A3B8' }}>
-                        <Activity size={13} /> {totalGames} trận
-                      </span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                        📈 {avgMonth}/tháng
-                      </span>
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      <button className="btn btn-outline btn-sm" title="Sửa thông tin" onClick={() => onEditClick(p)}>
+                        <Pencil size={13} />
+                      </button>
+                      {!isUsedInSessions && (
+                        <button className="btn btn-danger-soft btn-sm" title="Xóa tay vợt" onClick={() => {
+                          if (confirm(`Xóa vận động viên "${p.name}"?`)) onDeleteClick(p)
+                        }}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button className="btn btn-outline btn-sm" title="Sửa thông tin" onClick={() => onEditClick(p)}>
-                      <Pencil size={13} />
-                    </button>
-                    {!isUsedInSessions && (
-                      <button className="btn btn-danger-soft btn-sm" title="Xóa tay vợt" onClick={() => {
-                        if (confirm(`Xóa vận động viên "${p.name}"?`)) onDeleteClick(p)
-                      }}>
-                        <Trash2 size={13} />
-                      </button>
-                    )}
+                  {/* Stats & Participation Rate % Bar */}
+                  <div style={{ borderTop: '1px dashed #E2E8F0', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', color: '#64748B' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: isActive ? 700 : 500, color: isActive ? '#15803D' : '#94A3B8' }}>
+                        <Activity size={13} /> {totalGames}/{totalClubSessions} phiên ({avgMonth}/tháng)
+                      </span>
+                      <span style={{ fontWeight: 800, color: participationRate >= 75 ? '#15803D' : participationRate >= 40 ? '#B45309' : '#64748B' }}>
+                        {participationRate.toFixed(1)}% tham gia
+                      </span>
+                    </div>
+
+                    <div style={{ width: '100%', height: 6, background: '#F1F5F9', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${Math.min(participationRate, 100)}%`,
+                        background: participationRate >= 75 ? 'linear-gradient(90deg, #22C55E, #16A34A)' : participationRate >= 40 ? 'linear-gradient(90deg, #FBBF24, #F59E0B)' : 'linear-gradient(90deg, #CBD5E1, #94A3B8)',
+                        borderRadius: 999,
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
                   </div>
                 </div>
               )

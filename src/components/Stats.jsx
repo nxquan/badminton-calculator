@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts'
-import { formatMoney, sortPlayerNames, sortExpenseTypes } from '../constants'
+import { formatMoney, sortPlayerNames, sortExpenseTypes, createPlayerResolver } from '../constants'
 
 function CustomChartTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null
@@ -153,28 +153,48 @@ function TrendLineChart({ data, groupMode }) {
   )
 }
 
-function calcStats(sessions, expenseTypes = []) {
+function calcStats(sessions, expenseTypes = [], resolvePlayerName) {
   const stats = {}
 
-  for (const session of sessions) {
-    for (const entry of session.entries) {
-      if (!entry.people || entry.people.length === 0 || entry.amount <= 0) continue
+  sessions.forEach((session, sessionIdx) => {
+    const sId = session.id || session._id || `s_${sessionIdx}`
+    const sessionParticipants = new Set()
+
+    for (const entry of session.entries || []) {
+      if (entry.payer) {
+        const payerName = resolvePlayerName ? resolvePlayerName(entry.payer) : String(entry.payer)
+        if (payerName) sessionParticipants.add(payerName)
+      }
+      const people = Array.isArray(entry.people) ? entry.people : []
       const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
-      for (let index = 0; index < entry.people.length; index += 1) {
-        const rawPerson = entry.people[index]
-        const amountForPerson = amounts.length === entry.people.length ? Number(amounts[index]) : entry.amount / entry.people.length
-        if (!Number.isFinite(amountForPerson) || amountForPerson < 0) continue
-        // Normalize person key: may be an id string, a name string, or an object { id, name }
-        let personKey = rawPerson
-        if (rawPerson && typeof rawPerson === 'object') {
-          personKey = rawPerson.id || rawPerson.name || String(rawPerson)
+
+      for (let index = 0; index < people.length; index += 1) {
+        const rawPerson = people[index]
+        const pName = resolvePlayerName ? resolvePlayerName(rawPerson) : String(rawPerson)
+        if (!pName) continue
+
+        sessionParticipants.add(pName)
+
+        const amountForPerson = amounts.length === people.length ? Number(amounts[index]) : (entry.amount ? Number(entry.amount) / people.length : 0)
+        if (Number.isFinite(amountForPerson) && amountForPerson > 0) {
+          if (!stats[pName]) {
+            stats[pName] = { totals: {}, sessionsSet: new Set() }
+          }
+          if (!stats[pName].totals[entry.type]) {
+            stats[pName].totals[entry.type] = 0
+          }
+          stats[pName].totals[entry.type] += amountForPerson
         }
-        if (!stats[personKey]) stats[personKey] = {}
-        if (!stats[personKey][entry.type]) stats[personKey][entry.type] = 0
-        stats[personKey][entry.type] += amountForPerson
       }
     }
-  }
+
+    sessionParticipants.forEach((pName) => {
+      if (!stats[pName]) {
+        stats[pName] = { totals: {}, sessionsSet: new Set() }
+      }
+      stats[pName].sessionsSet.add(sId)
+    })
+  })
 
   return stats
 }
@@ -205,6 +225,8 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
   const isMonthlyView = filterType === 'month'
   const isAllView = filterType === 'all'
 
+  const resolvePlayerName = useMemo(() => createPlayerResolver(players), [players])
+
   const monthOptions = useMemo(() => getMonthOptions(sessions), [sessions])
 
   const filteredSessions = useMemo(() => {
@@ -230,13 +252,13 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
       map[key].total += sessionTotal
       map[key].count += 1
 
-      ;(s.entries || []).forEach((entry) => {
-        if (entry.payer) map[key].playerSet.add(entry.payer)
-        ;(entry.people || []).forEach((p) => {
-          const name = typeof p === 'object' ? (p.name || p.id) : p
-          if (name) map[key].playerSet.add(name)
+        ; (s.entries || []).forEach((entry) => {
+          if (entry.payer) map[key].playerSet.add(resolvePlayerName(entry.payer))
+            ; (entry.people || []).forEach((p) => {
+              const name = resolvePlayerName(p)
+              if (name) map[key].playerSet.add(name)
+            })
         })
-      })
     })
 
     const sortedKeys = Object.keys(map).sort((a, b) => a.localeCompare(b))
@@ -256,7 +278,7 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
         activePlayersCount: map[key].playerSet.size,
       }
     })
-  }, [sessions, trendGroupMode])
+  }, [sessions, trendGroupMode, resolvePlayerName])
 
   const trendSummary = useMemo(() => {
     if (trendData.length === 0) return { totalSpent: 0, peak: null, avgPerPeriod: 0, totalSessions: 0 }
@@ -270,47 +292,25 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
     return { totalSpent, peak, avgPerPeriod, totalSessions }
   }, [trendData])
 
-  const stats = useMemo(() => calcStats(filteredSessions, expenseTypes), [filteredSessions, expenseTypes])
-  const idToName = useMemo(() => Object.fromEntries((players || []).map((p) => [p.id, p.name])), [players])
+  const stats = useMemo(() => calcStats(filteredSessions, expenseTypes, resolvePlayerName), [filteredSessions, expenseTypes, resolvePlayerName])
 
   // normalize stats keys (ids) to names
   const statsByName = useMemo(() => {
     const out = {}
     for (const key of Object.keys(stats)) {
-      // Try resolve key as id first, then as existing player name, otherwise look into sessions
-      let name = idToName[key]
-
-      if (!name) {
-        const found = (players || []).find((p) => p.id === key || p.name === key)
-        if (found) name = found.name
+      const name = resolvePlayerName(key) || key
+      if (!out[name]) {
+        out[name] = { totals: {}, sessionsSet: new Set() }
       }
-
-      // Fallback: search filteredSessions for a matching person object that contains a name
-      if (!name) {
-        for (const session of filteredSessions) {
-          for (const entry of session.entries || []) {
-            const people = entry.people || []
-            for (const p of people) {
-              if (p && typeof p === 'object' && (String(p.id) === key || p.name === key)) {
-                name = p.name || String(p.id)
-                break
-              }
-              if ((typeof p === 'string' && p === key)) {
-                name = p
-                break
-              }
-            }
-            if (name) break
-          }
-          if (name) break
-        }
+      for (const [type, amt] of Object.entries(stats[key].totals || {})) {
+        out[name].totals[type] = (out[name].totals[type] || 0) + amt
       }
-
-      if (!name) name = key
-      out[name] = { ...(out[name] || {}), ...(stats[key] || {}) }
+      for (const sId of stats[key].sessionsSet || []) {
+        out[name].sessionsSet.add(sId)
+      }
     }
     return out
-  }, [stats, idToName, players, filteredSessions])
+  }, [stats, resolvePlayerName])
 
   // Get all expense types used in filtered sessions
   const usedExpenseTypes = useMemo(() => {
@@ -327,14 +327,21 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
     return sortExpenseTypes(typeArray)
   }, [filteredSessions, expenseTypes])
 
+  const totalFilteredSessions = filteredSessions.length
+
   const rows = sortPlayerNames(Object.keys(statsByName))
     .map((name) => {
-      const totals = { ...statsByName[name] }
+      const totals = { ...(statsByName[name]?.totals || {}) }
       const total = Object.values(totals).reduce((s, v) => s + v, 0)
+      const sessionCount = statsByName[name]?.sessionsSet ? statsByName[name].sessionsSet.size : 0
+      const participationRate = totalFilteredSessions > 0 ? (sessionCount / totalFilteredSessions) * 100 : 0
       return {
         name,
         totals,
         total,
+        sessionCount,
+        totalSessions: totalFilteredSessions,
+        participationRate,
       }
     })
     .sort((a, b) => b.total - a.total)
@@ -366,52 +373,6 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
 
   return (
     <div>
-      <div className="card">
-        <div className="card-title">
-          <Filter size={18} style={{ color: '#16A34A' }} /> Bộ lọc
-        </div>
-        <div className="form-row" style={{ alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ flex: '0 0 auto', minWidth: '130px' }}>
-            <label>Loại lọc</label>
-            <select
-              value={filterType}
-              onChange={(e) => { setFilterType(e.target.value); setFilterValue('') }}
-            >
-              <option value="month">Theo tháng</option>
-              <option value="date">Theo ngày</option>
-              <option value="all">Tất cả</option>
-            </select>
-          </div>
-
-          {filterType === 'month' && (
-            <div className="form-group" style={{ flex: '0 0 auto', minWidth: '160px' }}>
-              <label>Tháng</label>
-              <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}>
-                <option value="">— Tất cả tháng —</option>
-                {monthOptions.map((m) => (
-                  <option key={m} value={m}>{formatMonth(m)}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {filterType === 'date' && (
-            <div className="form-group" style={{ flex: '0 0 auto', minWidth: '160px' }}>
-              <label>Ngày</label>
-              <input
-                type="date"
-                value={filterValue}
-                onChange={(e) => setFilterValue(e.target.value)}
-              />
-            </div>
-          )}
-
-          <div style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>
-            {sessionCount} phiên
-          </div>
-        </div>
-      </div>
-
       {/* Biểu đồ Thống kê Tiến trình (Progress Line Chart) */}
       <div className="card">
         <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -493,7 +454,51 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
         {/* Interactive Line Chart */}
         <TrendLineChart data={trendData} groupMode={trendGroupMode} />
       </div>
+      <div className="card">
+        <div className="card-title">
+          <Filter size={18} style={{ color: '#16A34A' }} /> Bộ lọc
+        </div>
+        <div className="form-row" style={{ alignItems: 'flex-end' }}>
+          <div className="form-group" style={{ flex: '0 0 auto', minWidth: '130px' }}>
+            <label>Loại lọc</label>
+            <select
+              value={filterType}
+              onChange={(e) => { setFilterType(e.target.value); setFilterValue('') }}
+            >
+              <option value="month">Theo tháng</option>
+              <option value="date">Theo ngày</option>
+              <option value="all">Tất cả</option>
+            </select>
+          </div>
 
+          {filterType === 'month' && (
+            <div className="form-group" style={{ flex: '0 0 auto', minWidth: '160px' }}>
+              <label>Tháng</label>
+              <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}>
+                <option value="">— Tất cả tháng —</option>
+                {monthOptions.map((m) => (
+                  <option key={m} value={m}>{formatMonth(m)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {filterType === 'date' && (
+            <div className="form-group" style={{ flex: '0 0 auto', minWidth: '160px' }}>
+              <label>Ngày</label>
+              <input
+                type="date"
+                value={filterValue}
+                onChange={(e) => setFilterValue(e.target.value)}
+              />
+            </div>
+          )}
+
+          <div style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+            {sessionCount} phiên
+          </div>
+        </div>
+      </div>
       <div className="card">
         <div className="card-title">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -533,6 +538,24 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                   <div style={{ fontSize: '1.05rem', fontWeight: 800, color: b.color }}>
                     {formatMoney(Math.round(topRow.total * 1000))}
                   </div>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    color: '#475569',
+                    marginTop: 4,
+                    background: 'rgba(255, 255, 255, 0.65)',
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    border: '1px solid rgba(0, 0, 0, 0.05)'
+                  }}>
+                    <span>🏸 {topRow.sessionCount}/{topRow.totalSessions} phiên</span>
+                    <span style={{ color: topRow.participationRate >= 75 ? '#15803D' : '#B45309' }}>
+                      {topRow.participationRate.toFixed(1)}% tham gia
+                    </span>
+                  </div>
                 </div>
               )
             })}
@@ -550,6 +573,8 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                 <tr>
                   <th>#</th>
                   <th>Vận động viên</th>
+                  <th style={{ textAlign: 'center', minWidth: '85px' }}>Số phiên</th>
+                  <th style={{ minWidth: '130px' }}>% Tham gia</th>
                   {usedExpenseTypes.map((type) => (
                     <th key={type.value} style={{ fontSize: '0.85rem' }}>
                       {type.emoji} {type.label}
@@ -574,6 +599,32 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                           </span>
                         )}
                       </td>
+                      <td style={{ textAlign: 'center', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {row.sessionCount} <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 500 }}>/ {row.totalSessions}</span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 3, overflow: 'hidden', minWidth: 36 }}>
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${Math.min(row.participationRate, 100)}%`,
+                                background: row.participationRate >= 75 ? '#22C55E' : row.participationRate >= 40 ? '#EAB308' : '#F97316',
+                                borderRadius: 3,
+                              }}
+                            />
+                          </div>
+                          <span style={{
+                            fontWeight: 800,
+                            fontSize: '0.8rem',
+                            color: row.participationRate >= 75 ? '#15803D' : row.participationRate >= 40 ? '#A16207' : '#C2410C',
+                            minWidth: '42px',
+                            textAlign: 'right'
+                          }}>
+                            {row.participationRate.toFixed(1)}%
+                          </span>
+                        </div>
+                      </td>
                       {usedExpenseTypes.map((type) => {
                         const amount = row.totals[type.value] || 0
                         return (
@@ -595,6 +646,12 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                 })}
                 <tr className="result-total">
                   <td colSpan={2}>TỔNG</td>
+                  <td style={{ textAlign: 'center', fontWeight: 800 }}>{filteredSessions.length} phiên</td>
+                  <td style={{ fontWeight: 800, fontSize: '0.82rem' }}>
+                    {rows.length > 0
+                      ? `${(rows.reduce((s, r) => s + r.participationRate, 0) / rows.length).toFixed(1)}% (TB)`
+                      : '—'}
+                  </td>
                   {usedExpenseTypes.map((type) => (
                     <td key={type.value}>
                       {formatMoney(Math.round(columnSums[type.value] * 1000))}
