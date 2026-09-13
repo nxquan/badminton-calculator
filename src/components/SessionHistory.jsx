@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, useEffect } from 'react'
-import { Filter, Trash2, CheckCircle2, CreditCard, Wallet } from 'lucide-react'
+import { Filter, Trash2, CheckCircle2, CreditCard, Wallet, Layers, CheckSquare, Square, ArrowRight } from 'lucide-react'
 import { formatMoney, calculateTotals, getEntryLabel } from '../constants'
+import ConsolidateSessionsModal from './ConsolidateSessionsModal'
 
 function parseSessionDate(dateValue) {
   if (!dateValue) return null
@@ -99,6 +100,35 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
     })
   }, [sessions, monthFilter])
 
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
+  const [selectedSessionIds, setSelectedSessionIds] = useState([])
+  const [showConsolidateModal, setShowConsolidateModal] = useState(false)
+
+  const selectedSessions = useMemo(() => {
+    return sessions.filter((s) => selectedSessionIds.includes(s?.id))
+  }, [sessions, selectedSessionIds])
+
+  const toggleSessionSelect = (sessionId) => {
+    setSelectedSessionIds((prev) =>
+      prev.includes(sessionId) ? prev.filter((id) => id !== sessionId) : [...prev, sessionId]
+    )
+  }
+
+  const allFilteredSelected = useMemo(() => {
+    if (filteredSessions.length === 0) return false
+    return filteredSessions.every((s) => selectedSessionIds.includes(s.id))
+  }, [filteredSessions, selectedSessionIds])
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      const filteredIds = new Set(filteredSessions.map((s) => s.id))
+      setSelectedSessionIds((prev) => prev.filter((id) => !filteredIds.has(id)))
+    } else {
+      const filteredIds = filteredSessions.map((s) => s.id)
+      setSelectedSessionIds((prev) => Array.from(new Set([...prev, ...filteredIds])))
+    }
+  }
+
   const groupedSessions = useMemo(() => {
     const groups = []
     let currentWeekGroup = null
@@ -175,7 +205,7 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
 
   return (
     <div>
-      <div style={{ margin: '8px 16px 14px 16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ margin: '8px 16px 14px 16px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', flexShrink: 0, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <Filter size={14} /> Lọc theo tháng:
         </label>
@@ -189,6 +219,20 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
             <option key={m} value={m}>{`Tháng ${String(Number(m.slice(5)))} / ${m.slice(0, 4)}`}</option>
           ))}
         </select>
+
+        <button
+          type="button"
+          className={`btn btn-sm ${isMultiSelectMode ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => {
+            setIsMultiSelectMode(!isMultiSelectMode)
+            if (isMultiSelectMode) setSelectedSessionIds([])
+          }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, borderRadius: '8px' }}
+        >
+          <Layers size={15} />
+          {isMultiSelectMode ? 'Thoát gộp phiên' : 'Gộp phiên tính tiền'}
+        </button>
+
         <div style={{
           marginLeft: 'auto',
           padding: '6px 14px',
@@ -217,6 +261,18 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
             <table className="result-table history-table">
               <thead>
                 <tr>
+                  {isMultiSelectMode && (
+                    <th style={{ textAlign: 'center', width: '42px' }}>
+                      <button
+                        type="button"
+                        onClick={toggleSelectAllFiltered}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit', display: 'inline-flex' }}
+                        title={allFilteredSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                      >
+                        {allFilteredSelected ? <CheckSquare size={18} color="#16A34A" /> : <Square size={18} />}
+                      </button>
+                    </th>
+                  )}
                   <th style={{textAlign: 'center'}}>Ngày</th>
                   <th style={{textAlign: 'center'}}>Người</th>
                   <th style={{textAlign: 'center'}}>Số giờ CL</th>
@@ -231,7 +287,7 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
                 {groupedSessions.map((weekGroup) => (
                   <Fragment key={weekGroup.key}>
                     <tr className="history-group-row history-week-row">
-                      <td colSpan={8} style={{ whiteSpace: 'nowrap', fontWeight: 800, textAlign: 'left' }}>
+                      <td colSpan={isMultiSelectMode ? 9 : 8} style={{ whiteSpace: 'nowrap', fontWeight: 800, textAlign: 'left' }}>
                         <span
                           style={{
                             display: 'inline-flex',
@@ -319,13 +375,28 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
                           }
 
                           const isFullySettled = totalCount > 0 ? settledCount === totalCount : true
+                          const isSelected = selectedSessionIds.includes(session.id)
 
                           return (
                             <tr
                               key={session.id}
-                              className="history-row"
-                              onClick={() => onView(session)}
+                              className={`history-row ${isSelected ? 'selected-row' : ''}`}
+                              onClick={() => (isMultiSelectMode ? toggleSessionSelect(session.id) : onView(session))}
+                              style={{
+                                cursor: 'pointer',
+                                backgroundColor: isSelected ? '#F0FDF4' : undefined,
+                              }}
                             >
+                              {isMultiSelectMode && (
+                                <td style={{ textAlign: 'center', verticalAlign: 'middle' }} onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleSessionSelect(session.id)}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#16A34A' }}
+                                  />
+                                </td>
+                              )}
                               {index === 0 && (
                                 <td
                                   rowSpan={dayGroup.sessions.length}
@@ -416,6 +487,55 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
               </tbody>
             </table>
           </div>
+      )}
+
+      {isMultiSelectMode && selectedSessionIds.length > 0 && (
+        <div style={{
+          position: 'sticky',
+          bottom: '16px',
+          margin: '16px 16px 0 16px',
+          padding: '12px 20px',
+          background: 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
+          color: '#ffffff',
+          borderRadius: '16px',
+          boxShadow: '0 10px 25px -5px rgba(22, 163, 74, 0.4), 0 8px 10px -6px rgba(22, 163, 74, 0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          zIndex: 40,
+        }}>
+          <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+            Đã chọn <span style={{ fontSize: '1.15rem', color: '#FEF08A', fontWeight: 900 }}>{selectedSessionIds.length}</span> phiên đánh
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '8px' }}
+              onClick={() => setSelectedSessionIds([])}
+            >
+              Bỏ chọn tất cả
+            </button>
+            <button
+              type="button"
+              className="btn btn-warning"
+              style={{ fontWeight: 800, padding: '8px 18px', display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: '10px' }}
+              onClick={() => setShowConsolidateModal(true)}
+            >
+              Tính tiền & Xuất Bill <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showConsolidateModal && (
+        <ConsolidateSessionsModal
+          sessions={selectedSessions}
+          players={players}
+          expenseTypes={expenseTypes}
+          onClose={() => setShowConsolidateModal(false)}
+        />
       )}
     </div>
   )
