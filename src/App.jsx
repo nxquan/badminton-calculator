@@ -784,6 +784,7 @@ export default function App() {
             {sidebarView.view === 'sessions' && (
               <SessionsPage
                 sessions={sessions}
+                players={players}
                 expenseTypes={expenseTypes}
                 onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
                 onDeleteSession={handleDeleteSession}

@@ -1,5 +1,17 @@
-import { useMemo } from 'react'
-import { Plus, Calendar, Wallet, Users, Flame, BarChart3, ArrowRight } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Calendar, Wallet, Users, Flame, BarChart3, ArrowRight, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts'
 import PlayerAvatar from '../components/PlayerAvatar'
 import { formatMoney } from '../constants'
 
@@ -15,7 +27,43 @@ function formatFullMonth(ym) {
   return `Tháng ${parseInt(m, 10)}/${y}`
 }
 
+function HomePageChartTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null
+  const dataPoint = payload[0]?.payload || {}
+
+  return (
+    <div
+      style={{
+        background: '#0F172A',
+        color: '#FFFFFF',
+        padding: '12px 16px',
+        borderRadius: '12px',
+        fontSize: '0.84rem',
+        boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+        border: '1px solid #334155',
+        lineHeight: 1.5,
+      }}
+    >
+      <div style={{ fontWeight: 800, color: '#4ADE80', fontSize: '0.9rem', marginBottom: 6 }}>
+        📅 {dataPoint.fullLabel || label}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
+        <span style={{ color: '#94A3B8' }}>💵 Kinh phí chi tiêu:</span>
+        <strong style={{ color: '#22C55E' }}>{formatMoney(dataPoint.expense)}</strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+        <span style={{ color: '#94A3B8' }}>🏸 Số phiên cầu:</span>
+        <strong style={{ color: '#FB923C' }}>{dataPoint.sessions} phiên</strong>
+      </div>
+    </div>
+  )
+}
+
 export default function HomePage({ sessions = [], players = [], expenseTypes = [], onNewSession, onViewSession, onNavigateTab }) {
+  const [playerSearchTerm, setPlayerSearchTerm] = useState('')
+  const [playerFilterPill, setPlayerFilterPill] = useState('all')
+  const [visiblePlayerCount, setVisiblePlayerCount] = useState(5)
+
   // 1. Calculate Continuous Monthly Data for Chart (Includes months with 0 sessions)
   const monthlyData = useMemo(() => {
     const map = {}
@@ -77,6 +125,16 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
     const uniqueSortedKeys = [...new Set(monthKeys)].sort()
     return uniqueSortedKeys.map((k) => map[k])
   }, [sessions])
+
+  const homeChartData = useMemo(() => {
+    return monthlyData.map((d) => ({
+      label: formatMonthTitle(d.monthKey),
+      fullLabel: formatFullMonth(d.monthKey),
+      sessions: d.sessionCount,
+      expense: Math.round(d.totalAmount * 1000),
+      expenseK: d.totalAmount,
+    }))
+  }, [monthlyData])
 
   // Chart max values for scaling bars
   const maxSessions = useMemo(() => {
@@ -164,6 +222,19 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
     return Math.max(...playerStats.map((p) => p.totalSpent), 1)
   }, [playerStats])
 
+  const filteredPlayerStats = useMemo(() => {
+    return playerStats.filter((p) => {
+      const matchesSearch = p.name.toLowerCase().includes(playerSearchTerm.trim().toLowerCase())
+      if (!matchesSearch) return false
+      if (playerFilterPill === 'active' && p.totalSpent <= 0) return false
+      return true
+    })
+  }, [playerStats, playerSearchTerm, playerFilterPill])
+
+  const displayedPlayerStats = useMemo(() => {
+    return filteredPlayerStats.slice(0, visiblePlayerCount)
+  }, [filteredPlayerStats, visiblePlayerCount])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Hero Welcome Banner */}
@@ -178,11 +249,11 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             <div style={{ fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A7F3D0', marginBottom: 4 }}>
               🏆 BẢNG ĐIỀU KHIỂN CÂU LẠC BỘ CẦU LÔNG
             </div>
-            <h2 style={{ fontFamily: 'var(--font-family-display)', fontSize: '1.4rem', fontWeight: 800, margin: 0, color: '#FFFFFF' }}>
+            <h2 style={{ fontFamily: 'var(--font-family-display)', fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#FFFFFF' }}>
               Chào mừng đến với Smash Calculator!
             </h2>
-            <p style={{ margin: '4px 0 0 0', fontSize: '0.88rem', color: '#E6F4EA' }}>
-              Theo dõi tổng quan các phiên cầu, thống kê biểu đồ chi tiêu và phong độ vận động viên.
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: '#E6F4EA' }}>
+              Theo dõi phiên cầu, chi tiêu & phong độ vận động viên.
             </p>
           </div>
           <button className="btn btn-add" onClick={onNewSession} style={{ padding: '11px 20px', fontSize: '0.95rem' }}>
@@ -254,19 +325,14 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
         </div>
       </div>
 
-      {/* Monthly Statistics Bar & Line Progress Combo Chart */}
+      {/* Monthly Statistics Bar & Line Progress Combo Chart using Recharts */}
       <div className="card">
         <div className="card-title" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <BarChart3 size={20} style={{ color: '#16A34A' }} /> Biểu đồ Thống kê Tiến trình Phiên cầu & Chi tiêu theo Tháng
           </span>
-          <div style={{ display: 'flex', gap: 14, fontSize: '0.82rem', fontWeight: 700 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#F97316', display: 'inline-block' }} /> Số phiên (Cột & Đường trend)
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#16A34A', display: 'inline-block' }} /> Kinh phí (VND)
-            </span>
+          <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
+            Biểu đồ kết hợp Recharts (Đường & Diện tích)
           </div>
         </div>
 
@@ -275,114 +341,79 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             <p>Chưa có dữ liệu thống kê tháng nào.</p>
           </div>
         ) : (
-          <div style={{ padding: '16px 0 0 0', position: 'relative' }}>
-            <div style={{ overflowX: 'auto', paddingBottom: 10 }}>
-              <div style={{ position: 'relative', minWidth: Math.max(monthlyData.length * 64, 500), height: 230 }}>
-                
-                {/* SVG Progress Trend Line Overlay */}
-                <svg
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: 180,
-                    pointerEvents: 'none',
-                    zIndex: 5
-                  }}
-                >
-                  {/* Polyline path for Session Count Progress Trend */}
-                  {(() => {
-                    const totalItems = monthlyData.length
-                    if (totalItems < 1) return null
-
-                    const points = monthlyData.map((d, idx) => {
-                      const itemWidth = 100 / totalItems
-                      const cx = (idx + 0.5) * itemWidth
-                      // Height range: top 20 to 170
-                      const cy = 170 - (d.sessionCount / maxSessions) * 140
-                      return { x: cx, y: cy, d }
-                    })
-
-                    const svgPoints = points.map((p) => `${p.x}% ${p.y}px`).join(', ')
-
-                    return (
-                      <>
-                        {/* Progress line */}
-                        <polyline
-                          fill="none"
-                          stroke="#EA580C"
-                          strokeWidth="3"
-                          strokeDasharray="4 2"
-                          points={points.map((p) => `${(p.d ? (points.indexOf(p) + 0.5) * (100 / totalItems) : 0)}% ${p.y}`).join(' ')}
-                          style={{ filter: 'drop-shadow(0 2px 4px rgba(234, 88, 12, 0.4))' }}
-                        />
-                        {/* Dots on line */}
-                        {points.map((p, idx) => (
-                          <circle
-                            key={idx}
-                            cx={`${p.x}%`}
-                            cy={p.y}
-                            r={p.d.sessionCount > 0 ? "5" : "3"}
-                            fill={p.d.sessionCount > 0 ? "#F97316" : "#CBD5E1"}
-                            stroke="#FFFFFF"
-                            strokeWidth="2"
-                          />
-                        ))}
-                      </>
-                    )
-                  })()}
-                </svg>
-
-                {/* Bars & Labels */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', height: 180, borderBottom: '2px solid #E2E8F0', paddingBottom: 4 }}>
-                  {monthlyData.map((d) => {
-                    const sessionBarHeight = d.sessionCount > 0 ? Math.max(Math.round((d.sessionCount / maxSessions) * 140), 12) : 4
-                    const expenseBarHeight = d.totalAmount > 0 ? Math.max(Math.round((d.totalAmount / maxExpense) * 140), 12) : 4
-                    return (
-                      <div key={d.monthKey} style={{ flex: 1, minWidth: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 140 }}>
-                          {/* Session count bar */}
-                          <div
-                            title={`${formatFullMonth(d.monthKey)}: ${d.sessionCount} phiên cầu`}
-                            style={{
-                              width: 16,
-                              height: `${sessionBarHeight}px`,
-                              background: d.sessionCount > 0 ? 'linear-gradient(180deg, #FB923C 0%, #F97316 100%)' : '#E2E8F0',
-                              borderRadius: '3px 3px 0 0',
-                              transition: 'height 0.3s ease',
-                              opacity: d.sessionCount > 0 ? 0.9 : 0.4
-                            }}
-                          />
-                          {/* Expense bar */}
-                          <div
-                            title={`${formatFullMonth(d.monthKey)}: ${formatMoney(Math.round(d.totalAmount * 1000))}`}
-                            style={{
-                              width: 16,
-                              height: `${expenseBarHeight}px`,
-                              background: d.totalAmount > 0 ? 'linear-gradient(180deg, #22C55E 0%, #16A34A 100%)' : '#CBD5E1',
-                              borderRadius: '3px 3px 0 0',
-                              transition: 'height 0.3s ease',
-                              opacity: d.totalAmount > 0 ? 0.9 : 0.4
-                            }}
-                          />
-                        </div>
-                        <div style={{ fontSize: '0.78rem', fontWeight: 700, color: d.sessionCount > 0 ? '#0F172A' : '#94A3B8', textAlign: 'center', marginTop: 8 }}>
-                          {formatMonthTitle(d.monthKey)}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
+          <div style={{ width: '100%', height: 300, marginTop: 10 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={homeChartData} margin={{ top: 15, right: 15, left: 5, bottom: 15 }}>
+                <defs>
+                  <linearGradient id="homeExpenseAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#16A34A" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#16A34A" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  stroke="#64748B"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                />
+                <YAxis
+                  yAxisId="left"
+                  stroke="#16A34A"
+                  fontSize={11}
+                  tickFormatter={(val) => (val >= 1000 ? `${(val / 1000).toFixed(1)}M` : val > 0 ? `${Math.round(val)}k` : '0')}
+                  tickLine={false}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#EA580C"
+                  fontSize={11}
+                  allowDecimals={false}
+                  tickLine={false}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                />
+                <Tooltip content={<HomePageChartTooltip />} />
+                <Legend wrapperStyle={{ paddingTop: 10, fontSize: '0.8rem' }} />
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="expenseK"
+                  name="Kinh phí (k VND)"
+                  fill="url(#homeExpenseAreaGrad)"
+                  stroke="#16A34A"
+                  strokeWidth={2.5}
+                />
+                <Bar
+                  yAxisId="left"
+                  dataKey="expenseK"
+                  name="Cột Kinh phí"
+                  fill="#22C55E"
+                  opacity={0.3}
+                  barSize={18}
+                  radius={[4, 4, 0, 0]}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="sessions"
+                  name="Số phiên cầu"
+                  stroke="#EA580C"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#F97316', stroke: '#FFFFFF', strokeWidth: 2 }}
+                  activeDot={{ r: 7, fill: '#EA580C' }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
         )}
       </div>
 
       {/* Per-Player Spending & Attendance Breakdown */}
       <div className="card">
-        <div className="card-title" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-title" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <Users size={20} style={{ color: '#16A34A' }} /> Thống kê Chi tiêu & Tần suất của từng Tay vợt
           </span>
@@ -393,57 +424,144 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
           )}
         </div>
 
-        {playerStats.length === 0 ? (
-          <div className="empty-state">
-            <p>Chưa có dữ liệu thành viên.</p>
+        {/* Search & Filter Toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+          <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: '300px' }}>
+            <Search size={16} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+            <input
+              type="text"
+              placeholder="Tìm tay vợt..."
+              value={playerSearchTerm}
+              onChange={(e) => {
+                setPlayerSearchTerm(e.target.value)
+                setVisiblePlayerCount(5)
+              }}
+              style={{
+                paddingLeft: 32,
+                paddingRight: 10,
+                paddingTop: 6,
+                paddingBottom: 6,
+                fontSize: '0.84rem',
+                borderRadius: 8,
+                border: '1px solid #CBD5E1',
+                width: '100%',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => { setPlayerFilterPill('all'); setVisiblePlayerCount(5) }}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                border: playerFilterPill === 'all' ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
+                background: playerFilterPill === 'all' ? '#F0FDF4' : '#FFFFFF',
+                color: playerFilterPill === 'all' ? '#15803D' : '#64748B',
+                cursor: 'pointer',
+              }}
+            >
+              Tất cả ({playerStats.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPlayerFilterPill('active'); setVisiblePlayerCount(5) }}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                border: playerFilterPill === 'active' ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
+                background: playerFilterPill === 'active' ? '#F0FDF4' : '#FFFFFF',
+                color: playerFilterPill === 'active' ? '#15803D' : '#64748B',
+                cursor: 'pointer',
+              }}
+            >
+              Có chi tiêu ({playerStats.filter(p => p.totalSpent > 0).length})
+            </button>
+          </div>
+        </div>
+
+        {displayedPlayerStats.length === 0 ? (
+          <div className="empty-state" style={{ padding: '20px 0' }}>
+            <p>Không tìm thấy tay vợt phù hợp.</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {playerStats.map((item, idx) => {
-              const percentage = Math.round((item.totalSpent / maxPlayerSpent) * 100)
-              return (
-                <div key={item.name} style={{
-                  padding: '12px 16px',
-                  background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: 'var(--radius)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#64748B', width: 20 }}>
-                        {idx + 1}.
-                      </span>
-                      <PlayerAvatar player={item.player} size={36} />
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A' }}>{item.name}</div>
-                        <div style={{ fontSize: '0.78rem', color: '#64748B' }}>🏸 {item.sessionCount} phiên tham gia</div>
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {displayedPlayerStats.map((item, idx) => {
+                const percentage = Math.round((item.totalSpent / maxPlayerSpent) * 100)
+                return (
+                  <div key={item.name} style={{
+                    padding: '12px 16px',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: 'var(--radius)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#64748B', width: 22 }}>
+                          {idx + 1}.
+                        </span>
+                        <PlayerAvatar player={item.player} size={36} />
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A' }}>{item.name}</div>
+                          <div style={{ fontSize: '0.78rem', color: '#64748B' }}>🏸 {item.sessionCount} phiên tham gia</div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 800, fontSize: '1rem', color: '#16A34A' }}>
+                          {formatMoney(Math.round(item.totalSpent * 1000))}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Phần chi phí chia lẻ</div>
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 800, fontSize: '1rem', color: '#16A34A' }}>
-                        {formatMoney(Math.round(item.totalSpent * 1000))}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Phần chi phí chia lẻ</div>
-                    </div>
-                  </div>
 
-                  {/* Visual Progress Bar */}
-                  <div style={{ width: '100%', height: 6, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${percentage}%`,
-                      height: '100%',
-                      background: 'linear-gradient(90deg, #22C55E 0%, #16A34A 100%)',
-                      borderRadius: 999,
-                      transition: 'width 0.4s ease'
-                    }} />
+                    {/* Visual Progress Bar */}
+                    <div style={{ width: '100%', height: 6, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${percentage}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #22C55E 0%, #16A34A 100%)',
+                        borderRadius: 999,
+                        transition: 'width 0.4s ease'
+                      }} />
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+
+            {/* Lazy Load / Load More Controls */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+              {filteredPlayerStats.length > visiblePlayerCount && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setVisiblePlayerCount((prev) => prev + 5)}
+                  style={{ fontSize: '0.84rem', padding: '7px 16px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <ChevronDown size={16} /> Xem thêm 5 tay vợt (Còn {filteredPlayerStats.length - visiblePlayerCount})
+                </button>
+              )}
+              {visiblePlayerCount > 5 && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setVisiblePlayerCount(5)}
+                  style={{ fontSize: '0.84rem', padding: '7px 16px', borderRadius: 999, color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <ChevronUp size={16} /> Thu gọn (Top 5)
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import html2canvas from 'html2canvas'
-import { Download, Copy, Image as ImageIcon, ArrowLeft, Pencil, QrCode, Check } from 'lucide-react'
+import { Download, Copy, Image as ImageIcon, ArrowLeft, Pencil, QrCode, Check, Receipt, Calculator, Calendar } from 'lucide-react'
 import { formatMoney, calculateTotals, getEntryLabel, sortPlayerNames, sortExpenseTypes } from '../constants'
 import paymentQrImage from '../files/qr-code.jpeg'
 
@@ -58,7 +58,28 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   // map totals keys (ids or names) to names
   const totals = Object.fromEntries(Object.entries(totalsRaw).map(([k, v]) => [(getName(k) || k), v]))
   const grandTotal = Object.values(totals).reduce((sum, value) => sum + value, 0)
-  const participants = sortPlayerNames(Object.keys(totals))
+  // Actual participants who actually shared/played in at least 1 expense entry
+  const actualParticipants = useMemo(() => {
+    const set = new Set()
+    for (const entry of normalizedEntries) {
+      for (const pName of entry.people || []) {
+        if (pName) set.add(pName)
+      }
+    }
+    return sortPlayerNames(Array.from(set))
+  }, [normalizedEntries])
+
+  // All involved individuals (actual participants + payers who paid upfront)
+  const allInvolvedPlayers = useMemo(() => {
+    const set = new Set(actualParticipants)
+    for (const entry of normalizedEntries) {
+      if (entry.payer) set.add(entry.payer)
+    }
+    return sortPlayerNames(Array.from(set))
+  }, [actualParticipants, normalizedEntries])
+
+  const participants = actualParticipants
+
   const defaultTransferTo = useMemo(() => {
     const counts = {}
     for (const entry of normalizedEntries) {
@@ -72,8 +93,8 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
       return a[0].localeCompare(b[0], 'vi', { sensitivity: 'base' })
     })
 
-    return ranked[0]?.[0] || participants[0] || ''
-  }, [normalizedEntries, participants])
+    return ranked[0]?.[0] || allInvolvedPlayers[0] || ''
+  }, [normalizedEntries, allInvolvedPlayers])
   const [activeResultTab, setActiveResultTab] = useState('entries')
   const [transferTo, setTransferTo] = useState(defaultTransferTo)
   const [includeQrCode, setIncludeQrCode] = useState(true)
@@ -87,22 +108,22 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
   }, [session])
 
   const canEditSession = useMemo(
-    () => participants.every((name) => !settledPlayers.includes(name)),
-    [participants, settledPlayers]
+    () => allInvolvedPlayers.every((name) => !settledPlayers.includes(name)),
+    [allInvolvedPlayers, settledPlayers]
   )
 
   // Persist `transferTo` per session in localStorage so user's choice isn't reset
   useEffect(() => {
     const key = `session.transferTo.${session.id}`
     // Priority: session.transferTo (from DB) -> localStorage -> default participant
-    if (session.transferTo && participants.includes(session.transferTo)) {
+    if (session.transferTo && allInvolvedPlayers.includes(session.transferTo)) {
       setTransferTo(session.transferTo)
       return
     }
 
     try {
       const stored = localStorage.getItem(key)
-      if (stored && participants.includes(stored)) {
+      if (stored && allInvolvedPlayers.includes(stored)) {
         setTransferTo(stored)
         return
       }
@@ -111,15 +132,15 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     }
 
     setTransferTo(defaultTransferTo)
-  }, [session.id, participants, defaultTransferTo])
+  }, [session.id, allInvolvedPlayers, defaultTransferTo])
 
   useEffect(() => {
-    if (!participants.length) {
+    if (!allInvolvedPlayers.length) {
       setTransferTo('')
-    } else if (transferTo && !participants.includes(transferTo)) {
-      setTransferTo(defaultTransferTo || participants[0])
+    } else if (transferTo && !allInvolvedPlayers.includes(transferTo)) {
+      setTransferTo(defaultTransferTo || allInvolvedPlayers[0])
     }
-  }, [participants, transferTo, defaultTransferTo])
+  }, [allInvolvedPlayers, transferTo, defaultTransferTo])
 
   const handleToggleSettled = (name) => {
     const nextSettled = settledPlayers.includes(name)
@@ -166,7 +187,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     wrapper.style.position = 'absolute'
     wrapper.style.left = '-9999px'
     wrapper.style.top = '0'
-    wrapper.style.width = '780px'
+    wrapper.style.width = '860px'
     wrapper.style.background = '#F1F5F9'
     wrapper.style.padding = '20px'
     wrapper.style.fontFamily = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
@@ -193,7 +214,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
         <!-- Content Container -->
         <div style="padding: 20px;">
           <!-- 3 Quick Stat Cards -->
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
             <div style="background: #F0FDF4; border: 1.5px solid #BBF7D0; border-radius: 12px; padding: 10px 14px;">
               <div style="font-size: 0.72rem; font-weight: 700; color: #15803D;">👥 Số người tham gia</div>
               <div style="font-size: 1.1rem; font-weight: 800; color: #0F172A; margin-top: 2px;">${participants.length} tay vợt</div>
@@ -204,7 +225,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
             </div>
             <div style="background: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 10px 14px;">
               <div style="font-size: 0.72rem; font-weight: 700; color: #1D4ED8;">🏦 Chuyển khoản cho</div>
-              <div style="font-size: 1.1rem; font-weight: 800; color: #0F172A; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${transferTo || 'Chưa chọn'}</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #0F172A; margin-top: 2px; white-space: nowrap;">${transferTo || 'Chưa chọn'}</div>
             </div>
           </div>
 
@@ -215,19 +236,19 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
             </div>
             <table style="width: 100%; border-collapse: collapse; border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; font-size: 0.82rem; table-layout: fixed;">
               <colgroup>
-                <col style="width: 26%;" />
-                <col style="width: 20%;" />
+                <col style="width: 32%;" />
                 <col style="width: 18%;" />
                 <col style="width: 16%;" />
+                <col style="width: 14%;" />
                 <col style="width: 20%;" />
               </colgroup>
               <thead>
                 <tr style="background: #F8FAFC; color: #475569; border-bottom: 1.5px solid #E2E8F0; text-align: left;">
-                  <th style="padding: 8px 10px; white-space: nowrap;">Khoản chi</th>
-                  <th style="padding: 8px 10px; white-space: nowrap;">Người ứng trả</th>
-                  <th style="padding: 8px 10px; text-align: right; white-space: nowrap;">Số tiền</th>
-                  <th style="padding: 8px 10px; text-align: center; white-space: nowrap;">Số người</th>
-                  <th style="padding: 8px 10px; text-align: right; white-space: nowrap;">Chia lẻ /người</th>
+                  <th style="padding: 9px 12px; white-space: nowrap;">Khoản chi</th>
+                  <th style="padding: 9px 12px; white-space: nowrap;">Người ứng trả</th>
+                  <th style="padding: 9px 12px; text-align: right; white-space: nowrap;">Số tiền</th>
+                  <th style="padding: 9px 12px; text-align: center; white-space: nowrap;">Số người</th>
+                  <th style="padding: 9px 12px; text-align: right; white-space: nowrap;">Chia lẻ /người</th>
                 </tr>
               </thead>
               <tbody>
@@ -237,11 +258,11 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
         : e.amount / (e.people.length || 1)
       return `
                     <tr style="border-bottom: 1px solid #F1F5F9; background: ${idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'};">
-                      <td style="padding: 8px 10px; font-weight: 700; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${getEntryLabel(e, expenseTypes)}</td>
-                      <td style="padding: 8px 10px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${e.payer}</td>
-                      <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: #0F172A; white-space: nowrap;">${formatMoney(Math.round(e.amount * 1000))}</td>
-                      <td style="padding: 8px 10px; text-align: center; color: #64748B; white-space: nowrap;">${e.people.length} người</td>
-                      <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: #16A34A; white-space: nowrap;">${formatMoney(Math.round(perPerson * 1000))}</td>
+                      <td style="padding: 9px 12px; font-weight: 700; color: #0F172A; word-break: break-word; white-space: normal; line-height: 1.35;">${getEntryLabel(e, expenseTypes)}</td>
+                      <td style="padding: 9px 12px; color: #334155; word-break: break-word; white-space: normal; line-height: 1.35;">${e.payer}</td>
+                      <td style="padding: 9px 12px; text-align: right; font-weight: 700; color: #0F172A; white-space: nowrap;">${formatMoney(Math.round(e.amount * 1000))}</td>
+                      <td style="padding: 9px 12px; text-align: center; color: #64748B; white-space: nowrap;">${e.people.length} người</td>
+                      <td style="padding: 9px 12px; text-align: right; font-weight: 700; color: #16A34A; white-space: nowrap;">${formatMoney(Math.round(perPerson * 1000))}</td>
                     </tr>
                   `
     }).join('')}
@@ -256,22 +277,22 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
             </div>
             <table style="width: 100%; border-collapse: collapse; border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; font-size: 0.82rem; table-layout: fixed;">
               <colgroup>
-                <col style="width: 25%;" />
-                <col style="width: 15%;" />
-                <col style="width: 15%;" />
-                <col style="width: 27%;" />
-                <col style="width: 18%;" />
+                <col style="width: 28%;" />
+                <col style="width: 16%;" />
+                <col style="width: 16%;" />
+                <col style="width: 24%;" />
+                <col style="width: 16%;" />
               </colgroup>
               <thead>
                 <tr style="background: #F8FAFC; color: #475569; border-bottom: 1.5px solid #E2E8F0; text-align: left;">
-                  <th style="padding: 8px 8px; white-space: nowrap;">Vận động viên</th>
-                  <th style="padding: 8px 8px; text-align: right; white-space: nowrap;">Phải trả</th>
-                  <th style="padding: 8px 8px; text-align: right; white-space: nowrap;">Đã trả trước</th>
-                  <th style="padding: 8px 8px; text-align: right; overflow: hidden; text-overflow: ellipsis; line-height: 1.25;">
-                    <div style="font-size: 0.72rem; color: #64748B; font-weight: 600;">CẦN CHUYỂN CHO</div>
-                    <div style="color: #15803D; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${transferTo || 'Trưởng nhóm'}</div>
+                  <th style="padding: 9px 12px; white-space: nowrap;">Vận động viên</th>
+                  <th style="padding: 9px 12px; text-align: right; white-space: nowrap;">Phải trả</th>
+                  <th style="padding: 9px 12px; text-align: right; white-space: nowrap;">Đã trả trước</th>
+                  <th style="padding: 9px 12px; text-align: right; line-height: 1.25;">
+                    <div style="font-size: 0.7rem; color: #64748B; font-weight: 700;">CẦN CHUYỂN CHO</div>
+                    <div style="color: #15803D; font-weight: 800; word-break: break-word; white-space: normal;">${transferTo || 'Trưởng nhóm'}</div>
                   </th>
-                  <th style="padding: 8px 8px; text-align: center; white-space: nowrap;">Trạng thái</th>
+                  <th style="padding: 9px 12px; text-align: center; white-space: nowrap;">Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,18 +305,18 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
       return `
                     <tr style="border-bottom: 1px solid #F1F5F9; background: ${isTransferTarget ? '#F0FDF4' : '#FFFFFF'};">
-                      <td style="padding: 8px 8px; font-weight: 700; color: ${isTransferTarget ? '#15803D' : '#0F172A'};">
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; min-width: 0;">
-                          <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</span>
-                          ${isTransferTarget ? '<span style="font-size: 0.64rem; background: #DCFCE7; color: #15803D; padding: 1px 5px; border-radius: 999px; font-weight: 800; flex-shrink: 0; white-space: nowrap;">Người nhận</span>' : ''}
+                      <td style="padding: 9px 12px; font-weight: 700; color: ${isTransferTarget ? '#15803D' : '#0F172A'};">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 0;">
+                          <span style="word-break: break-word; white-space: normal; line-height: 1.3;">${name}</span>
+                          ${isTransferTarget ? '<span style="font-size: 0.64rem; background: #DCFCE7; color: #15803D; padding: 1px 6px; border-radius: 999px; font-weight: 800; flex-shrink: 0; white-space: nowrap;">Người nhận</span>' : ''}
                         </div>
                       </td>
-                      <td style="padding: 8px 8px; text-align: right; font-weight: 700; color: #0F172A; white-space: nowrap;">${formatMoney(Math.round(amount * 1000))}</td>
-                      <td style="padding: 8px 8px; text-align: right; color: #64748B; white-space: nowrap;">${paid > 0 ? formatMoney(Math.round(paid * 1000)) : '-'}</td>
-                      <td style="padding: 8px 8px; text-align: right; font-weight: 800; color: ${oweAmountToTarget > 0 ? '#EA580C' : '#16A34A'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                      <td style="padding: 9px 12px; text-align: right; font-weight: 700; color: #0F172A; white-space: nowrap;">${formatMoney(Math.round(amount * 1000))}</td>
+                      <td style="padding: 9px 12px; text-align: right; color: #64748B; white-space: nowrap;">${paid > 0 ? formatMoney(Math.round(paid * 1000)) : '-'}</td>
+                      <td style="padding: 9px 12px; text-align: right; font-weight: 800; color: ${oweAmountToTarget > 0 ? '#EA580C' : '#16A34A'}; white-space: nowrap;">
                         ${isTransferTarget ? '0 VND (Nhận tiền)' : (oweAmountToTarget > 0 ? formatMoney(Math.round(oweAmountToTarget * 1000)) : '0 VND')}
                       </td>
-                      <td style="padding: 8px 8px; text-align: center; white-space: nowrap;">
+                      <td style="padding: 9px 12px; text-align: center; white-space: nowrap;">
                         ${isSettled || isTransferTarget
           ? '<span style="font-size: 0.72rem; font-weight: 800; color: #15803D; background: #DCFCE7; padding: 3px 8px; border-radius: 999px; white-space: nowrap; display: inline-block;">✓ Đã xong</span>'
           : '<span style="font-size: 0.72rem; font-weight: 800; color: #C2410C; background: #FFEDD5; padding: 3px 8px; border-radius: 999px; white-space: nowrap; display: inline-block;">⏳ Chờ CK</span>'}
@@ -498,7 +519,9 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
       </div>
 
       <div className="card">
-        <div className="card-title">📅 {formattedDate}</div>
+        <div className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Calendar size={18} style={{ color: '#16A34A' }} /> {formattedDate}
+        </div>
       </div>
 
       <div className="tab-bar">
@@ -506,21 +529,25 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
           type="button"
           className={`tab-btn ${activeResultTab === 'entries' ? 'active' : ''}`}
           onClick={() => setActiveResultTab('entries')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          📋 Chi tiết khoản chi
+          <Receipt size={16} /> Chi tiết khoản chi
         </button>
         <button
           type="button"
           className={`tab-btn ${activeResultTab === 'split' ? 'active' : ''}`}
           onClick={() => setActiveResultTab('split')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          💵 Kết quả chia tiền
+          <Calculator size={16} /> Kết quả chia tiền
         </button>
       </div>
 
       {activeResultTab === 'entries' && (
         <div className="card">
-          <div className="card-title">📋 Chi tiết khoản chi</div>
+          <div className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Receipt size={18} style={{ color: '#16A34A' }} /> Chi tiết khoản chi
+          </div>
 
           <div className="table-wrap">
             <table className="result-table" style={{ marginBottom: 0, tableLayout: 'fixed', width: '100%' }}>
@@ -615,8 +642,10 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
 
       {activeResultTab === 'split' && (
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            💵 Kết quả chia tiền
+          <div className="card-title" style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Calculator size={18} style={{ color: '#16A34A' }} /> Kết quả chia tiền
+            </span>
             <div>
               <button
                 type="button"
@@ -792,7 +821,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
             </div>
 
             <div className="people-picker">
-              {participants.map((name) => {
+              {allInvolvedPlayers.map((name) => {
                 const isSelected = transferTo === name
                 return (
                   <button

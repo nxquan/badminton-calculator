@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState, useEffect } from 'react'
-import { Filter, Trash2 } from 'lucide-react'
+import { Filter, Trash2, CheckCircle2, CreditCard, Wallet } from 'lucide-react'
 import { formatMoney, calculateTotals, getEntryLabel } from '../constants'
 
 function parseSessionDate(dateValue) {
@@ -63,10 +63,20 @@ function getMonthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
-export default function SessionHistory({ sessions, expenseTypes, onView, onDelete }) {
+export default function SessionHistory({ sessions, players = [], expenseTypes, onView, onDelete }) {
   const [monthFilter, setMonthFilter] = useState(() => {
     return new Date().toISOString().slice(0, 7)
   })
+
+  const idToNameMap = useMemo(() => {
+    const map = {}
+    for (const p of players || []) {
+      if (p && p.id) {
+        map[String(p.id)] = p.name || String(p.id)
+      }
+    }
+    return map
+  }, [players])
 
   const months = useMemo(() => {
     const setMonths = new Set()
@@ -210,6 +220,7 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                   <th style={{textAlign: 'center'}}>Ngày</th>
                   <th style={{textAlign: 'center'}}>Người</th>
                   <th style={{textAlign: 'center'}}>Số giờ CL</th>
+                  <th style={{textAlign: 'center'}}>Thanh toán</th>
                   <th style={{textAlign: 'center'}}>Phiên đặc biệt</th>
                   <th style={{textAlign: 'center'}}>Ghi chú</th>
                   <th style={{textAlign: 'center'}}>Tổng</th>
@@ -243,21 +254,71 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                     {weekGroup.days.map((dayGroup) => (
                       <Fragment key={dayGroup.key}>
                         {dayGroup.sessions.map((session, index) => {
-                          const totals = calculateTotals(session.entries)
+                          const totals = calculateTotals(session.entries || [])
                           const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0)
-                          const playerCount = new Set(session.entries.flatMap((e) => e.people.map(p => p.id))).size
-                          const isSpecialSession = session.entries.some((e) => (e.people || []).some((person) => person.name === 'Khánh'))
+                          const playerCount = new Set((session.entries || []).flatMap((e) => (e.people || []).map(p => typeof p === 'object' ? (p.name || p.id) : p))).size
+                          const isSpecialSession = (session.entries || []).some((e) => (e.people || []).some((person) => (person.name || person) === 'Khánh'))
 
-                          const totalHours = session.entries
+                          const totalHours = (session.entries || [])
                             .filter((e) => e.hours && e.hours > 0)
                             .reduce((sum, e) => sum + e.hours, 0)
 
-                          const details = session.entries
+                          const details = (session.entries || [])
                             .map((e) => {
                               const label = getEntryLabel(e, expenseTypes)
                               return e.note.length > 0 ? label : null
                             })
                             .filter(Boolean)
+
+                          // Calculate payment settlement status (Đã thanh toán / Tổng số người chơi)
+                          const settledList = (session.settledPlayers || []).map(String)
+                          const transferTo = session.transferTo || ''
+
+                          // Collect unique participant names/IDs for this session
+                          const sessionParticipantsSet = new Set()
+                          const nameToIdMap = {}
+
+                          for (const e of session.entries || []) {
+                            for (const p of e.people || []) {
+                              const pId = typeof p === 'object' ? String(p.id || p.name || '') : String(p)
+                              const pName = typeof p === 'object' ? (p.name || p.id) : (idToNameMap[pId] || pId)
+                              if (pName) {
+                                sessionParticipantsSet.add(pName)
+                                if (pId) nameToIdMap[pName] = pId
+                              }
+                            }
+                          }
+
+                          const sessionParticipantList = Array.from(sessionParticipantsSet)
+                          const totalCount = sessionParticipantList.length
+
+                          let settledCount = 0
+
+                          for (const name of sessionParticipantList) {
+                            const pId = nameToIdMap[name] || name
+
+                            const isTransferTarget = Boolean(transferTo && (transferTo === name || transferTo === pId))
+                            const isExplicitlySettled = settledList.includes(name) || (pId && settledList.includes(pId))
+
+                            // Calculate upfront payments vs share spent
+                            const paidUpfront = (session.entries || [])
+                              .filter((e) => {
+                                const payerKey = typeof e.payer === 'object' ? (e.payer.name || e.payer.id) : e.payer
+                                return payerKey === name || payerKey === pId
+                              })
+                              .reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
+                            const share = (totals[pId] !== undefined ? totals[pId] : totals[name]) || 0
+                            const owe = share - paidUpfront
+
+                            const isSettled = isTransferTarget || isExplicitlySettled || owe <= 0
+
+                            if (isSettled) {
+                              settledCount += 1
+                            }
+                          }
+
+                          const isFullySettled = totalCount > 0 ? settledCount === totalCount : true
 
                           return (
                             <tr
@@ -276,6 +337,45 @@ export default function SessionHistory({ sessions, expenseTypes, onView, onDelet
                               )}
                               <td>{playerCount}</td>
                               <td style={{ textAlign: 'center' }}>{totalHours > 0 ? `${totalHours}h` : '-'}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                {totalCount === 0 ? (
+                                  <span style={{ color: '#16A34A', fontWeight: 700, fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <CheckCircle2 size={14} /> Hoàn tất
+                                  </span>
+                                ) : isFullySettled ? (
+                                  <span style={{
+                                    color: '#15803D',
+                                    fontWeight: 800,
+                                    fontSize: '0.8rem',
+                                    background: '#DCFCE7',
+                                    padding: '3px 10px',
+                                    borderRadius: '999px',
+                                    border: '1px solid #86EFAC',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    <CheckCircle2 size={13} /> {settledCount}/{totalCount}
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    color: '#B45309',
+                                    fontWeight: 800,
+                                    fontSize: '0.8rem',
+                                    background: '#FEF3C7',
+                                    padding: '3px 10px',
+                                    borderRadius: '999px',
+                                    border: '1px solid #FDE68A',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    <CreditCard size={13} /> {settledCount}/{totalCount}
+                                  </span>
+                                )}
+                              </td>
                               <td style={{ textAlign: 'center', fontWeight: 600, color: isSpecialSession ? 'var(--success)' : 'var(--text-secondary)' }}>
                                 {isSpecialSession ? 'Có' : 'Không'}
                               </td>
