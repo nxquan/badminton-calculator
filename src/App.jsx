@@ -181,8 +181,9 @@ export default function App() {
 
   const syncPlayersForNames = useCallback((names) => {
     const toAdd = []
-    for (const name of names) {
-      if (!name) continue
+    for (const item of names || []) {
+      const name = typeof item === 'object' ? String(item?.name || item?.id || '').trim() : String(item || '').trim()
+      if (!name || name === '[object Object]') continue
       if (!players.some((p) => p.name === name)) {
         toAdd.push({ id: crypto.randomUUID(), name, avatarSource: '' })
       }
@@ -199,7 +200,7 @@ export default function App() {
       // if r matches an id in players, return name
       const found = players.find((p) => p.id === r)
       return found ? found.name : r
-    })
+    }).filter((name) => Boolean(name) && name !== '[object Object]')
   }, [players])
 
   const handleAddPlayerName = useCallback(async (name) => {
@@ -327,9 +328,13 @@ export default function App() {
         let resolvedPlayers = []
         if (Array.isArray(fetchedPlayersRaw) && fetchedPlayersRaw.length && typeof fetchedPlayersRaw[0] === 'string') {
           // legacy: convert strings to objects with generated ids
-          resolvedPlayers = fetchedPlayersRaw.map((n) => ({ id: crypto.randomUUID(), name: n, avatarSource: '' }))
-        } else if (Array.isArray(fetchedPlayersRaw)) {
           resolvedPlayers = fetchedPlayersRaw
+            .filter((n) => Boolean(n) && n !== '[object Object]')
+            .map((n) => ({ id: crypto.randomUUID(), name: n, avatarSource: '' }))
+        } else if (Array.isArray(fetchedPlayersRaw)) {
+          resolvedPlayers = fetchedPlayersRaw.filter(
+            (p) => p && p.name && p.name !== '[object Object]' && String(p.name).trim() !== '[object Object]'
+          )
         }
         setPlayers(resolvedPlayers)
         const types = typesResult.status === 'fulfilled' ? typesResult.value : []
@@ -338,7 +343,7 @@ export default function App() {
         setSessions(resolvedSessions)
 
         // If no players in DB but sessions have names, ensure players exist
-        const derived = getSessionPeople(resolvedSessions)
+        const derived = getSessionPeople(resolvedSessions).filter((n) => Boolean(n) && n !== '[object Object]')
         if (resolvedPlayers.length === 0 && derived.length > 0) {
           const toCreate = [...new Set(derived)].map((n) => {
             const id = crypto.randomUUID()

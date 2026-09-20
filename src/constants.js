@@ -66,10 +66,10 @@ export function normalizeStr(str) {
 
 export function createPlayerResolver(players = []) {
   const map = new Map()
-  for (const p of players) {
+  for (const p of players || []) {
     if (!p) continue
-    const canonical = String(p.name || '').trim()
-    if (!canonical) continue
+    const canonical = typeof p === 'object' ? String(p.name || p.id || '').trim() : String(p).trim()
+    if (!canonical || canonical === '[object Object]') continue
     if (p.id != null) map.set(String(p.id), canonical)
     map.set(canonical.toLowerCase(), canonical)
     map.set(normalizeStr(canonical), canonical)
@@ -79,10 +79,10 @@ export function createPlayerResolver(players = []) {
     if (!value && value !== 0) return ''
     let key = value
     if (value && typeof value === 'object') {
-      key = value.id != null ? String(value.id) : (value.name || '')
+      key = value.name || value.id || ''
     }
     const str = String(key).trim()
-    if (!str) return ''
+    if (!str || str === '[object Object]') return ''
     if (map.has(str)) return map.get(str)
     if (map.has(str.toLowerCase())) return map.get(str.toLowerCase())
     if (map.has(normalizeStr(str))) return map.get(normalizeStr(str))
@@ -91,9 +91,18 @@ export function createPlayerResolver(players = []) {
 }
 
 export function sortPlayerNames(names) {
-  return [...new Set(names.map((name) => String(name || '').trim()).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, 'vi', { sensitivity: 'base' })
-  )
+  return [
+    ...new Set(
+      (names || [])
+        .map((item) => {
+          if (!item && item !== 0) return ''
+          if (typeof item === 'object') return String(item.name || item.id || '').trim()
+          const s = String(item).trim()
+          return s === '[object Object]' ? '' : s
+        })
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }))
 }
 
 export function isCoreBadmintonType(type) {
@@ -106,8 +115,10 @@ export function shouldResetPeopleSelection(type) {
 
 export function getSessionPeople(sessions) {
   return sortPlayerNames(
-    sessions.flatMap((session) =>
-      (session.entries || []).flatMap((entry) => entry.people || [])
+    (sessions || []).flatMap((session) =>
+      (session?.entries || []).flatMap((entry) =>
+        (entry?.people || []).map((p) => (typeof p === 'object' ? p.name || p.id || '' : p))
+      )
     )
   )
 }
@@ -123,11 +134,15 @@ export function calculateTotals(entries) {
 
   const normalizePersonKey = (value) => {
     if (!value && value !== 0) return ''
-    if (typeof value === 'object') return String(value.id || value.name || '')
-    return String(value)
+    if (typeof value === 'object') {
+      const k = String(value.name || value.id || '').trim()
+      return k === '[object Object]' ? '' : k
+    }
+    const s = String(value).trim()
+    return s === '[object Object]' ? '' : s
   }
 
-  for (const entry of entries) {
+  for (const entry of entries || []) {
     const payerKey = normalizePersonKey(entry.payer)
     if (payerKey) {
       totals[payerKey] = totals[payerKey] || 0
@@ -137,7 +152,10 @@ export function calculateTotals(entries) {
     if (people.length === 0 || entry.amount <= 0) continue
 
     const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
-    const useDetailedAmounts = (entry.useDetailedAmounts === true || (entry.useDetailedAmounts === undefined && amounts.length === people.length)) && amounts.length === people.length
+    const useDetailedAmounts =
+      (entry.useDetailedAmounts === true ||
+        (entry.useDetailedAmounts === undefined && amounts.length === people.length)) &&
+      amounts.length === people.length
 
     for (let index = 0; index < people.length; index += 1) {
       const person = people[index]
