@@ -631,6 +631,23 @@ export default function App() {
     }
   }, [runToastMutation])
 
+  const handleDeleteExpenseType = useCallback((value) => {
+    // only delete if no session uses this type
+    const inUse = sessions.some((s) => (s.entries || []).some((e) => e.type === value))
+    if (inUse) return toast.error('Không thể xóa: loại này đang được sử dụng trong phiên')
+    setExpenseTypes((prev) => prev.filter((t) => t.value !== value))
+    if (mongoApi.isConfigured) {
+      void runToastMutation(
+        mongoApi.removeExpenseType(value),
+        {
+          pending: 'Đang xóa loại kinh phí...',
+          success: 'Đã xóa loại kinh phí',
+          error: 'Không thể xóa loại kinh phí',
+        }
+      )
+    }
+  }, [sessions, runToastMutation])
+
   const handleSaveSettings = useCallback(async (newSettings) => {
     setAppSettings((prev) => ({ ...prev, ...newSettings }))
     if (mongoApi.isConfigured) {
