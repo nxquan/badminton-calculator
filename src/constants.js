@@ -107,7 +107,7 @@ export function shouldResetPeopleSelection(type) {
 export function getSessionPeople(sessions) {
   return sortPlayerNames(
     sessions.flatMap((session) =>
-      session.entries.flatMap((entry) => [entry.payer, ...(entry.people || [])])
+      (session.entries || []).flatMap((entry) => entry.people || [])
     )
   )
 }

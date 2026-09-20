@@ -1,5 +1,5 @@
 import React from 'react'
-import { Home, Calendar, Trophy, Users, UserCheck, CreditCard, BarChart3 } from 'lucide-react'
+import { Home, Calendar, Trophy, Users, UserCheck, CreditCard, BarChart3, Settings } from 'lucide-react'
 
 export default function Sidebar({ onSelectMenu, currentView = 'sessions', className = '' }) {
   return (
@@ -71,7 +71,17 @@ export default function Sidebar({ onSelectMenu, currentView = 'sessions', classN
           <BarChart3 size={18} /> Bảng xếp hạng
         </button>
       </div>
+
+      <div className="sidebar-section">
+        <button
+          className={`sidebar-menu-btn ${currentView === 'settings' ? 'active' : ''}`}
+          onClick={() => onSelectMenu && onSelectMenu('settings')}
+        >
+          <Settings size={18} /> Cài đặt
+        </button>
+      </div>
     </aside>
   )
 }
+
 

@@ -112,3 +112,13 @@ export async function updateCombo(label, updated) {
 export async function removeCombo(label) {
   return api('DELETE', `/combos/${encodeURIComponent(label)}`)
 }
+
+/** System Settings APIs */
+export async function getSettings() {
+  return api('GET', '/settings')
+}
+
+export async function updateSettings(data) {
+  return api('PUT', '/settings', data)
+}
+

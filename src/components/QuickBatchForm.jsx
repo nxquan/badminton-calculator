@@ -1,12 +1,243 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { sortExpenseTypes, DEFAULT_EXPENSE_TYPES, formatMoney } from '../constants'
 import PlayerAvatar from './PlayerAvatar'
 
-function MiniPeoplePicker({ selected, onToggle, players = [], badmintonPlayers = [] }) {
-  const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })), [players])
-  const targetBadminton = (badmintonPlayers && badmintonPlayers.length > 0) ? badmintonPlayers : sortedPlayers.map(p => p.id)
-  const isBadmintonActive = targetBadminton.length > 0 && targetBadminton.every(id => selected.includes(id)) && selected.every(id => targetBadminton.includes(id))
+function PayerPicker({ value, players = [], onSelect, placeholder = 'Chọn người trả...' }) {
+  const sortedPlayers = useMemo(
+    () => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })),
+    [players]
+  )
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+
+  const selectedPlayer = useMemo(
+    () => sortedPlayers.find((p) => p.id === value) || null,
+    [sortedPlayers, value]
+  )
+
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    setQuery(selectedPlayer ? selectedPlayer.name : '')
+  }, [selectedPlayer])
+
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [query, open])
+
+  const filteredPlayers = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return sortedPlayers
+    return sortedPlayers.filter((player) => {
+      const haystack = `${player.name || ''} ${player.id || ''}`.toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [query, sortedPlayers])
+
+  const choosePlayer = (player) => {
+    onSelect(player.id)
+    setQuery(player.name)
+    setOpen(false)
+    setHighlightedIndex(0)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filteredPlayers.length > 0) choosePlayer(filteredPlayers[highlightedIndex] || filteredPlayers[0])
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpen(true)
+      setHighlightedIndex((index) => Math.min(index + 1, filteredPlayers.length - 1))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setOpen(true)
+      setHighlightedIndex((index) => Math.max(index - 1, 0))
+    }
+    if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        {selectedPlayer && (
+          <div style={{ position: 'absolute', left: '8px', display: 'flex', alignItems: 'center', pointerEvents: 'none', zIndex: 2 }}>
+            <PlayerAvatar player={selectedPlayer} size={22} />
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          placeholder={placeholder}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          style={{
+            width: '100%',
+            padding: '6px 10px',
+            paddingLeft: selectedPlayer ? '36px' : '10px',
+            paddingRight: '30px',
+            borderRadius: '8px',
+            border: '1px solid var(--border)',
+            fontSize: '0.85rem',
+            background: 'var(--card-bg)',
+            color: 'var(--text)',
+            fontWeight: selectedPlayer ? 600 : 400,
+          }}
+        />
+
+        {selectedPlayer && (
+          <button
+            type="button"
+            aria-label="Clear payer"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelect('')
+              setQuery('')
+              setHighlightedIndex(0)
+              setOpen(true)
+              inputRef.current?.focus()
+            }}
+            style={{
+              position: 'absolute',
+              right: '6px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: 'var(--text-secondary)',
+              zIndex: 3,
+              padding: '2px 6px',
+              lineHeight: 1,
+            }}
+            title="Bỏ chọn người trả"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {open && filteredPlayers.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            maxHeight: '220px',
+            overflowY: 'auto',
+          }}
+        >
+          {filteredPlayers.map((player, index) => {
+            const isSelected = player.id === value
+            const isHighlighted = highlightedIndex === index
+            return (
+              <button
+                key={player.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choosePlayer(player)}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 10px',
+                  border: 'none',
+                  background: isHighlighted ? 'rgba(34, 197, 94, 0.12)' : 'transparent',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: isSelected ? 700 : 400,
+                  color: isSelected ? 'var(--primary)' : 'var(--text)',
+                }}
+              >
+                <PlayerAvatar player={player} size={22} />
+                <span style={{ flex: 1 }}>{player.name}</span>
+                {isSelected && (
+                  <span style={{ color: 'var(--primary)', fontSize: '14px', fontWeight: 800 }}>✓</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MiniPeoplePicker({ selected, onToggle, players = [], badmintonPlayers = [], combos = [] }) {
+  const sortedPlayers = useMemo(
+    () => players.slice().sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })),
+    [players]
+  )
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const targetBadminton = (badmintonPlayers && badmintonPlayers.length > 0)
+    ? badmintonPlayers
+    : sortedPlayers.map((p) => p.id)
+
+  const isBadmintonActive = targetBadminton.length > 0 &&
+    targetBadminton.every((id) => selected.includes(id)) &&
+    selected.every((id) => targetBadminton.includes(id))
+
   const allSelected = sortedPlayers.length > 0 && sortedPlayers.every((p) => selected.includes(p.id))
+
+  const sortedCombos = useMemo(() => {
+    return (combos || []).map((combo) => ({
+      ...combo,
+      members: (combo.members || [])
+        .slice()
+        .sort((a, b) => {
+          const nameA = players.find((p) => p.id === a)?.name || String(a)
+          const nameB = players.find((p) => p.id === b)?.name || String(b)
+          return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' })
+        })
+    }))
+  }, [combos, players])
+
+  const resolveMemberId = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return null
+    const byId = players.find((p) => String(p.id) === raw)
+    if (byId) return byId.id
+    const byName = players.find((p) => p.name === raw)
+    if (byName) return byName.id
+    return raw
+  }
+
+  const comboMemberIds = (combo) => (combo.members || []).map(resolveMemberId).filter(Boolean)
+
+  const isComboActive = (combo) => {
+    const memberIds = comboMemberIds(combo)
+    return memberIds.length > 0 && memberIds.every((m) => selected.includes(m)) && selected.every((s) => memberIds.includes(s))
+  }
+
+  const handleCombo = (combo) => {
+    const memberIds = comboMemberIds(combo)
+    onToggle(isComboActive(combo) ? [] : [...memberIds])
+  }
 
   const togglePlayer = (id) => {
     if (selected.includes(id)) {
@@ -16,55 +247,92 @@ function MiniPeoplePicker({ selected, onToggle, players = [], badmintonPlayers =
     }
   }
 
+  const filteredPlayers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return sortedPlayers
+    return sortedPlayers.filter((p) => p.name.toLowerCase().includes(q))
+  }, [sortedPlayers, searchQuery])
+
   return (
-    <div style={{ padding: '10px 12px', background: 'var(--color-court-green-soft)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-court-green-dark)' }}>
-          👥 Chọn người tham gia khoản này ({selected.length} người):
-        </span>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+    <div style={{ marginTop: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+            👥 Người tham gia khoản này ({selected.length}/{players.length} người):
+          </span>
+          {players.length > 8 && (
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 Lọc tên..."
+              style={{
+                padding: '3px 8px',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                fontSize: '0.75rem',
+                background: 'var(--card-bg)',
+                color: 'var(--text)',
+                maxWidth: '140px',
+              }}
+            />
+          )}
+        </div>
+
+        <div className="select-actions" style={{ flexWrap: 'wrap', gap: '6px', marginBottom: 0 }}>
           <button
             type="button"
             className={`btn btn-sm ${isBadmintonActive ? 'btn-primary' : 'btn-outline'}`}
-            style={{ padding: '2px 8px', fontSize: '0.72rem', background: isBadmintonActive ? undefined : 'var(--card-bg)' }}
+            style={{ padding: '3px 10px', fontSize: '0.75rem' }}
             onClick={() => onToggle(isBadmintonActive ? [] : [...targetBadminton])}
           >
             🏸 Tham gia chơi cầu
           </button>
+
+          {sortedCombos.map((combo) => (
+            <button
+              key={combo.label}
+              type="button"
+              className={`btn btn-sm ${isComboActive(combo) ? 'btn-primary' : 'btn-outline'}`}
+              style={{ padding: '3px 10px', fontSize: '0.75rem' }}
+              onClick={() => handleCombo(combo)}
+            >
+              {combo.emoji} {combo.label}
+            </button>
+          ))}
+
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            style={{ padding: '2px 8px', fontSize: '0.72rem', background: 'var(--card-bg)' }}
+            style={{ padding: '3px 10px', fontSize: '0.75rem' }}
             onClick={() => onToggle(allSelected ? [] : sortedPlayers.map((p) => p.id))}
           >
-            {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+            {allSelected ? 'Bỏ tất cả' : 'Tất cả'}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => onToggle([])}
+            disabled={selected.length === 0}
+            style={{ padding: '3px 10px', fontSize: '0.75rem', opacity: selected.length === 0 ? 0.5 : 1 }}
+          >
+            Clear
           </button>
         </div>
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-        {sortedPlayers.map((p) => {
+
+      <div className="people-picker">
+        {filteredPlayers.map((p) => {
           const isSelected = selected.includes(p.id)
           return (
             <button
               key={p.id}
               type="button"
+              className={`people-chip ${isSelected ? 'selected' : ''}`}
               onClick={() => togglePlayer(p.id)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                borderRadius: '6px',
-                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                background: isSelected ? 'var(--card-bg)' : 'rgba(255, 255, 255, 0.6)',
-                color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
-                fontSize: '0.78rem',
-                fontWeight: isSelected ? 700 : 400,
-                cursor: 'pointer',
-                boxShadow: isSelected ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              }}
             >
-              <PlayerAvatar player={p} size={16} />
+              <PlayerAvatar player={p} size={22} />
               <span>{p.name}</span>
             </button>
           )
@@ -79,6 +347,7 @@ export default function QuickBatchForm({
   defaultPeople,
   players = [],
   expenseTypes = DEFAULT_EXPENSE_TYPES,
+  combos = [],
   badmintonPlayers = [],
   onApplyEntries,
 }) {
@@ -199,7 +468,7 @@ export default function QuickBatchForm({
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
           {rows.map((row) => {
             const typeInfo = sortedTypes.find((t) => t.value === row.type) || { label: row.type, emoji: '🧾' }
             const effectivePayer = row.customPayer || defaultPayer
@@ -212,8 +481,10 @@ export default function QuickBatchForm({
               <div
                 key={row.id}
                 style={{
+                  position: 'relative',
+                  zIndex: row.showOverride ? 20 : 1,
                   borderRadius: '10px',
-                  padding: '8px 12px',
+                  padding: '10px 14px',
                   background: row.enabled ? 'var(--color-bg-app)' : 'transparent',
                   border: row.enabled ? '1px solid var(--border)' : '1px dashed var(--border)',
                   opacity: row.enabled ? 1 : 0.6,
@@ -326,31 +597,59 @@ export default function QuickBatchForm({
 
                 {/* Per-row Manual Override Drawer */}
                 {row.showOverride && (
-                  <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Người trả khoản này:</label>
-                        <select
+                  <div
+                    style={{
+                      marginTop: '10px',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      background: 'var(--card-bg)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                        gap: '12px',
+                        alignItems: 'start',
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          💳 Người trả khoản này:
+                        </label>
+                        <PayerPicker
                           value={row.customPayer || defaultPayer}
-                          onChange={(e) => updateRow(row.id, { customPayer: e.target.value === defaultPayer ? '' : e.target.value })}
-                          style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.8rem', background: 'var(--card-bg)' }}
-                        >
-                          {players.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
+                          players={players}
+                          onSelect={(payerId) =>
+                            updateRow(row.id, { customPayer: payerId === defaultPayer ? '' : payerId })
+                          }
+                          placeholder="Tìm hoặc chọn người trả..."
+                        />
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Ghi chú:</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          📝 Ghi chú khoản này:
+                        </label>
                         <input
                           type="text"
                           value={row.note}
                           onChange={(e) => updateRow(row.id, { note: e.target.value })}
-                          placeholder="Ghi chú thêm..."
-                          style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.8rem', background: 'var(--card-bg)' }}
+                          placeholder="VD: Cầu 3in1, Thuê thêm sân..."
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border)',
+                            fontSize: '0.85rem',
+                            background: 'var(--card-bg)',
+                            color: 'var(--text)',
+                          }}
                         />
                       </div>
                     </div>
@@ -360,6 +659,7 @@ export default function QuickBatchForm({
                       onToggle={(nextPeople) => updateRow(row.id, { customPeople: nextPeople })}
                       players={players}
                       badmintonPlayers={cauRowPeople}
+                      combos={combos}
                     />
                   </div>
                 )}
@@ -399,7 +699,7 @@ export default function QuickBatchForm({
               disabled={activeEntries.length === 0 || defaultPeople.length === 0}
               style={{ opacity: activeEntries.length === 0 || defaultPeople.length === 0 ? 0.5 : 1, padding: '8px 16px', fontWeight: 700 }}
             >
-              ⚡ Áp dụng {activeEntries.length} khoản vào phiên
+              ⚡ Thêm {activeEntries.length} khoản vào phiên
             </button>
           </div>
         </div>
@@ -407,3 +707,4 @@ export default function QuickBatchForm({
     </div>
   )
 }
+

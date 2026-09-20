@@ -20,6 +20,7 @@ const sessions = db.collection('sessions')
 const players = db.collection('players')
 const expenseTypes = db.collection('expense_types')
 const combos = db.collection('combos')
+const settings = db.collection('settings')
 
 let isDbConnected = false
 
@@ -577,6 +578,37 @@ app.delete('/api/expense-types/:value', async (req, res) => {
     }
 
     res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Settings API ──────────────────────────────────────────
+// Lấy cài đặt hệ thống
+app.get('/api/settings', async (req, res) => {
+  try {
+    const doc = await settings.findOne({ _id: 'global_settings' })
+    res.json(doc ? { defaultPayer: doc.defaultPayer || '' } : { defaultPayer: '' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Cập nhật cài đặt hệ thống
+app.put('/api/settings', async (req, res) => {
+  try {
+    const { defaultPayer } = req.body || {}
+    const updateDoc = {
+      _id: 'global_settings',
+      defaultPayer: defaultPayer != null ? String(defaultPayer).trim() : '',
+      updatedAt: new Date().toISOString(),
+    }
+    await settings.updateOne(
+      { _id: 'global_settings' },
+      { $set: updateDoc },
+      { upsert: true }
+    )
+    res.json({ ok: true, settings: updateDoc })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

@@ -175,11 +175,6 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
       const sessionParticipants = new Set()
 
       for (const entry of session.entries || []) {
-        if (entry.payer) {
-          const payerName = resolvePlayerName(entry.payer)
-          if (payerName) sessionParticipants.add(payerName)
-        }
-
         const people = Array.isArray(entry.people) ? entry.people : []
         const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
         const shareCount = people.length

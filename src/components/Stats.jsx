@@ -161,10 +161,6 @@ function calcStats(sessions, expenseTypes = [], resolvePlayerName) {
     const sessionParticipants = new Set()
 
     for (const entry of session.entries || []) {
-      if (entry.payer) {
-        const payerName = resolvePlayerName ? resolvePlayerName(entry.payer) : String(entry.payer)
-        if (payerName) sessionParticipants.add(payerName)
-      }
       const people = Array.isArray(entry.people) ? entry.people : []
       const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
 
@@ -253,11 +249,10 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
       map[key].count += 1
 
         ; (s.entries || []).forEach((entry) => {
-          if (entry.payer) map[key].playerSet.add(resolvePlayerName(entry.payer))
-            ; (entry.people || []).forEach((p) => {
-              const name = resolvePlayerName(p)
-              if (name) map[key].playerSet.add(name)
-            })
+          ; (entry.people || []).forEach((p) => {
+            const name = resolvePlayerName(p)
+            if (name) map[key].playerSet.add(name)
+          })
         })
     })
 

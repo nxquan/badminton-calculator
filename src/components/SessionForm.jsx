@@ -1001,7 +1001,7 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], badmint
   )
 }
 
-export default function SessionForm({ session, players = [], expenseTypes, combos = [], onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
+export default function SessionForm({ session, defaultPayer, players = [], expenseTypes, combos = [], onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
   const [date, setDate] = useState(session.date || new Date().toISOString().split('T')[0])
   const dateInputId = useId()
   const [entries, setEntries] = useState(session.entries || [])
@@ -1016,23 +1016,37 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
     const anyWithPeople = (session.entries || []).find((e) => Array.isArray(e.people) && e.people.length > 0)
     return anyWithPeople ? anyWithPeople.people : []
   })
+
+  const resolvedDefaultPayerId = useMemo(() => {
+    if (!defaultPayer) return ''
+    const byId = (players || []).find((p) => p.id === defaultPayer)
+    if (byId) return byId.id
+    const byName = (players || []).find((p) => p.name === defaultPayer)
+    if (byName) return byName.id
+    return defaultPayer
+  }, [defaultPayer, players])
+
   const [lastPayer, setLastPayer] = useState(() => {
+    if (resolvedDefaultPayerId) return resolvedDefaultPayerId
     const found = (players || []).find((p) => p.name === DEFAULT_PAYER)
     return found ? found.id : DEFAULT_PAYER
   })
 
-  // if players load after mount, ensure lastPayer is the id for DEFAULT_PAYER
+  // if defaultPayer or players load after mount, ensure lastPayer uses defaultPayer if available
   useEffect(() => {
+    if (resolvedDefaultPayerId) {
+      setLastPayer(resolvedDefaultPayerId)
+      return
+    }
     if (!players || players.length === 0) return
     const found = players.find((p) => p.name === DEFAULT_PAYER)
     if (found) {
-      // only update if lastPayer is still the default name or invalid id
       const currentIsValid = players.some((pl) => pl.id === lastPayer)
       if (!currentIsValid || lastPayer === DEFAULT_PAYER) {
         setLastPayer(found.id)
       }
     }
-  }, [players])
+  }, [resolvedDefaultPayerId, players])
   const [lastType, setLastType] = useState('san')
 
   const badmintonPlayers = useMemo(() => {
@@ -1105,7 +1119,7 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
     return detail
   }, [entries, expenseTypes, idToName])
   const participantNames = useMemo(() => {
-    return sortPlayerNames(entries.flatMap((entry) => [idToName[entry.payer] || entry.payer, ...(entry.people || []).map((p) => idToName[p] || p)]))
+    return sortPlayerNames([...new Set(entries.flatMap((entry) => (entry.people || []).map((p) => idToName[p] || p)))])
   }, [entries, idToName])
   const playerColumns = useMemo(() => {
     return sortPlayerNames([...new Set(entries.flatMap((entry) => (entry.people || []).map((p) => idToName[p] || p)))])
@@ -1515,6 +1529,7 @@ export default function SessionForm({ session, players = [], expenseTypes, combo
           defaultPeople={lastPeople}
           players={players}
           expenseTypes={expenseTypes}
+          combos={combos}
           badmintonPlayers={badmintonPlayers}
           onApplyEntries={(batchEntries) => {
             setEntries((prev) => [...prev, ...batchEntries])

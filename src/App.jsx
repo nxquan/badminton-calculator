@@ -16,6 +16,8 @@ import ExpenseTypesPage from './pages/ExpenseTypesPage'
 import StatsPage from './pages/StatsPage'
 import EmptyPage from './pages/EmptyPage'
 import ComboConfigPage from './pages/ComboConfigPage'
+import SettingsPage from './pages/SettingsPage'
+import { getRandomCartoonAvatarUrl } from './utils/avatarUtils'
 
 const EXPENSE_EMOJI_CATEGORIES = [
   {
@@ -55,6 +57,7 @@ export default function App() {
   const [sidebarView, setSidebarView] = useState({ view: 'home', session: null })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [dbStatus, setDbStatus] = useState(mongoApi.isConfigured ? 'loading' : 'offline')
+  const [appSettings, setAppSettings] = useState({ defaultPayer: '' })
   const importRef = useRef(null)
 
   // Modal states
@@ -302,8 +305,17 @@ export default function App() {
     if (!mongoApi.isConfigured || dbInitializedRef.current) return
     dbInitializedRef.current = true
     setDbStatus('loading')
-    Promise.allSettled([mongoApi.getAllSessions(), mongoApi.getAllPlayers(), mongoApi.getAllExpenseTypes(), mongoApi.getAllCombos()])
-      .then(async ([sessionsResult, playersResult, typesResult, combosResult]) => {
+    Promise.allSettled([
+      mongoApi.getAllSessions(),
+      mongoApi.getAllPlayers(),
+      mongoApi.getAllExpenseTypes(),
+      mongoApi.getAllCombos(),
+      mongoApi.getSettings(),
+    ])
+      .then(async ([sessionsResult, playersResult, typesResult, combosResult, settingsResult]) => {
+        if (settingsResult.status === 'fulfilled' && settingsResult.value) {
+          setAppSettings(settingsResult.value)
+        }
         if (sessionsResult.status === 'rejected') toast.error(getErrorMessage(sessionsResult.reason, 'Không thể tải danh sách phiên'))
         if (playersResult.status === 'rejected') toast.error(getErrorMessage(playersResult.reason, 'Không thể tải danh sách người chơi'))
         if (typesResult.status === 'rejected') toast.error(getErrorMessage(typesResult.reason, 'Không thể tải danh sách loại kinh phí'))
@@ -619,22 +631,62 @@ export default function App() {
     }
   }, [runToastMutation])
 
-  const handleDeleteExpenseType = useCallback((value) => {
-    // only delete if no session uses this type
-    const inUse = sessions.some((s) => (s.entries || []).some((e) => e.type === value))
-    if (inUse) return toast.error('Không thể xóa: loại này đang được sử dụng trong phiên')
-    setExpenseTypes((prev) => prev.filter((t) => t.value !== value))
+  const handleSaveSettings = useCallback(async (newSettings) => {
+    setAppSettings((prev) => ({ ...prev, ...newSettings }))
     if (mongoApi.isConfigured) {
-      void runToastMutation(
-        mongoApi.removeExpenseType(value),
-        {
-          pending: 'Đang xóa loại kinh phí...',
-          success: 'Đã xóa loại kinh phí',
-          error: 'Không thể xóa loại kinh phí',
-        }
-      )
+      try {
+        await runToastMutation(
+          mongoApi.updateSettings(newSettings),
+          {
+            pending: 'Đang lưu cài đặt...',
+            success: 'Đã lưu cài đặt hệ thống',
+            error: 'Không thể lưu cài đặt',
+          }
+        )
+      } catch (e) {
+        console.error('Failed to save settings:', e)
+      }
+    } else {
+      toast.success('Đã lưu cài đặt')
     }
-  }, [sessions, runToastMutation])
+  }, [runToastMutation])
+
+  const handleBulkRandomizeAvatars = useCallback(async (styleId = 'random', onlyMissing = false) => {
+    const targetPlayers = players.filter((p) => !onlyMissing || !p.avatarSource?.trim())
+    if (targetPlayers.length === 0) {
+      toast.info('Tất cả vận động viên đều đã có Avatar')
+      return
+    }
+
+    const updatedPlayers = targetPlayers.map((p) => ({
+      ...p,
+      avatarSource: getRandomCartoonAvatarUrl(p.name || p.id, styleId),
+    }))
+
+    if (mongoApi.isConfigured) {
+      try {
+        await runToastMutation(
+          Promise.all(updatedPlayers.map((u) => mongoApi.updatePlayer(u.id, { name: u.name, avatarSource: u.avatarSource }))),
+          {
+            pending: 'Đang tạo Avatar hoạt hình ngẫu nhiên...',
+            success: `Đã cập nhật Avatar cho ${updatedPlayers.length} vận động viên`,
+            error: 'Lỗi khi cập nhật Avatar',
+          }
+        )
+      } catch (e) {
+        console.error('Failed bulk update avatars:', e)
+      }
+    } else {
+      toast.success(`Đã cập nhật Avatar cho ${updatedPlayers.length} vận động viên`)
+    }
+
+    setPlayers((prev) =>
+      prev.map((p) => {
+        const found = updatedPlayers.find((u) => u.id === p.id)
+        return found ? found : p
+      })
+    )
+  }, [players, runToastMutation])
 
   const handleCreateExpenseType = useCallback(() => {
     const label = expenseTypeLabel.trim()
@@ -698,9 +750,6 @@ export default function App() {
       const sessionParticipants = new Set()
 
       for (const entry of session.entries || []) {
-        const payerName = resolveParticipantName(entry.payer)
-        if (payerName) sessionParticipants.add(payerName)
-
         const people = Array.isArray(entry.people) ? entry.people : []
         const amounts = Array.isArray(entry.amounts) ? entry.amounts : []
         const shareCount = people.length
@@ -925,7 +974,19 @@ export default function App() {
                 players={players}
               />
             )}
-            {!['home', 'sessions', 'match-history', 'session', 'players', 'types', 'stats', 'combo-T3', 'combo-T7'].includes(sidebarView.view) && (
+            {sidebarView.view === 'settings' && (
+              <SettingsPage
+                players={players}
+                settings={appSettings}
+                onSaveSettings={handleSaveSettings}
+                onUpdatePlayerAvatar={(id, avatar) => {
+                  const p = players.find((pl) => pl.id === id)
+                  if (p) void handleEditPlayer(p, p.name, avatar)
+                }}
+                onBulkUpdateAvatars={handleBulkRandomizeAvatars}
+              />
+            )}
+            {!['home', 'sessions', 'match-history', 'session', 'players', 'types', 'stats', 'settings', 'combo-T3', 'combo-T7'].includes(sidebarView.view) && (
               <EmptyPage />
             )}
           </div>
@@ -954,12 +1015,22 @@ export default function App() {
                 />
               </div>
               <div className="form-group">
-                <label>Link avatar hoặc profile</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label style={{ margin: 0 }}>Link avatar hoặc profile</label>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setPlayerAvatarSource(getRandomCartoonAvatarUrl(playerInputValue || 'player'))}
+                    style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                  >
+                    🎲 Avatar hoạt hình ngẫu nhiên
+                  </button>
+                </div>
                 <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     inputMode="url"
-                    placeholder="Dán link Facebook, Instagram, hoặc link ảnh công khai..."
+                    placeholder="Dán link hoặc bấm nút Tạo ngẫu nhiên bên trên..."
                     value={playerAvatarSource}
                     onChange={(e) => setPlayerAvatarSource(e.target.value)}
                     style={{ width: '100%', paddingRight: 36 }}
@@ -1057,12 +1128,22 @@ export default function App() {
                 />
               </div>
               <div className="form-group">
-                <label>Link avatar hoặc profile</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label style={{ margin: 0 }}>Link avatar hoặc profile</label>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setEditPlayerAvatarSource(getRandomCartoonAvatarUrl(editPlayerNewName || 'player'))}
+                    style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                  >
+                    🎲 Avatar hoạt hình ngẫu nhiên
+                  </button>
+                </div>
                 <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     inputMode="url"
-                    placeholder="Dán link Facebook, Instagram, hoặc link ảnh công khai..."
+                    placeholder="Dán link hoặc bấm nút Tạo ngẫu nhiên bên trên..."
                     value={editPlayerAvatarSource}
                     onChange={(e) => setEditPlayerAvatarSource(e.target.value)}
                     style={{ width: '100%', paddingRight: 36 }}
@@ -1152,6 +1233,7 @@ export default function App() {
             <div style={{ overflow: 'auto', flex: 1 }}>
               <SessionForm
                 session={currentSession}
+                defaultPayer={appSettings.defaultPayer}
                 players={players}
                 expenseTypes={expenseTypes}
                 combos={combos}
