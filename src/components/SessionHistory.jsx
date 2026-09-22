@@ -116,6 +116,12 @@ function isSessionFullySettled(session, idToNameMap = {}) {
 
 export default function SessionHistory({ sessions, players = [], expenseTypes, onView, onDelete }) {
   const [monthFilter, setMonthFilter] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sessionHistory.monthFilter')
+      if (saved !== null) {
+        return saved
+      }
+    } catch { }
     return new Date().toISOString().slice(0, 7)
   })
 
@@ -167,6 +173,13 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
   const unsettledFilteredSessions = useMemo(() => {
     return filteredSessions.filter((s) => !isSessionFullySettled(s, idToNameMap))
   }, [filteredSessions, idToNameMap])
+
+  const totalFilteredCount = filteredSessions.length
+  const settledFilteredSessionsCount = useMemo(() => {
+    return filteredSessions.filter((s) => isSessionFullySettled(s, idToNameMap)).length
+  }, [filteredSessions, idToNameMap])
+  const unsettledFilteredCount = totalFilteredCount - settledFilteredSessionsCount
+  const settledPercent = totalFilteredCount > 0 ? Math.round((settledFilteredSessionsCount / totalFilteredCount) * 100) : 0
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedSessionIds, setSelectedSessionIds] = useState([])
@@ -274,6 +287,91 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
 
   return (
     <div>
+      {/* Basic Stats Summary Bar */}
+      <div style={{
+        margin: '8px 16px 14px 16px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+        gap: '10px'
+      }}>
+        {/* Stat 1: Tổng số phiên */}
+        <div style={{
+          background: 'var(--card-bg)',
+          border: '1px solid var(--border)',
+          borderRadius: '12px',
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span>🏸</span> Tổng số phiên
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+            {totalFilteredCount} <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>phiên</span>
+          </div>
+        </div>
+
+        {/* Stat 2: Đã thanh toán */}
+        <div style={{
+          background: 'var(--color-court-green-soft, rgba(22, 163, 74, 0.08))',
+          border: '1px solid var(--border)',
+          borderRadius: '12px',
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#15803D', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle2 size={13} /> Đã thanh toán
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#16A34A', display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span>{settledFilteredSessionsCount}/{totalFilteredCount}</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, opacity: 0.85 }}>({settledPercent}%)</span>
+          </div>
+        </div>
+
+        {/* Stat 3: Chưa thanh toán */}
+        <div style={{
+          background: unsettledFilteredCount > 0 ? 'rgba(245, 158, 11, 0.1)' : 'var(--card-bg)',
+          border: '1px solid var(--border)',
+          borderRadius: '12px',
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: unsettledFilteredCount > 0 ? '#B45309' : 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <CreditCard size={13} /> Chưa hoàn tất
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: unsettledFilteredCount > 0 ? '#D97706' : 'var(--text-primary)' }}>
+            {unsettledFilteredCount} <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>phiên</span>
+          </div>
+        </div>
+
+        {/* Stat 4: Tổng kinh phí */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.14) 100%)',
+          border: '1px solid var(--border)',
+          borderRadius: '12px',
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563EB', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Wallet size={13} /> Tổng tiền {monthFilter ? `Tháng ${Number(monthFilter.slice(5))}` : ''}
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#2563EB' }}>
+            {formatMoney(Math.round(monthTotal * 1000))}
+          </div>
+        </div>
+      </div>
+
       <div style={{ margin: '8px 16px 14px 16px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', flexShrink: 0, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <Filter size={14} /> Lọc theo tháng:
@@ -319,20 +417,6 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
           <UserX size={15} />
           {showUnsettledNames ? '👁️ Đang hiện tên chưa TT' : '👁️ Hiện tên người chưa TT'}
         </button>
-
-        <div style={{
-          marginLeft: 'auto',
-          padding: '6px 14px',
-          borderRadius: '999px',
-          background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
-          border: '1px solid #86EFAC',
-          fontSize: '0.88rem',
-          fontWeight: 800,
-          color: '#15803D',
-          boxShadow: '0 2px 6px rgba(22, 163, 74, 0.12)',
-        }}>
-          Tổng tháng: {formatMoney(Math.round(monthTotal * 1000))}
-        </div>
       </div>
 
       {filteredSessions.length === 0 ? (
@@ -512,7 +596,7 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
                                 {dayGroup.title}
                               </td>
                             )}
-                            <td>{playerCount}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 600 }}>{playerCount}</td>
                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'red' }}>{totalHours > 0 ? `${totalHours}h` : '-'}</td>
                             <td style={{ textAlign: 'center', padding: '8px 10px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
@@ -594,15 +678,16 @@ export default function SessionHistory({ sessions, players = [], expenseTypes, o
                             <td>
                               <div>{details.map((detail) => <div key={detail}>{detail}</div>)}</div>
                             </td>
-                            <td style={{
-                              whiteSpace: 'nowrap',
-                              fontWeight: 600,
-                              color: grandTotal > 1000 ? '#ef4444' : 'inherit',
-                              borderRadius: grandTotal > 1000 ? '4px' : 'inherit'
-                            }}>
-                              {formatMoney(Math.round(grandTotal * 1000))}
-                            </td>
-                            <td>
+                             <td style={{
+                               textAlign: 'center',
+                               whiteSpace: 'nowrap',
+                               fontWeight: 600,
+                               color: grandTotal > 1000 ? '#ef4444' : 'inherit',
+                               borderRadius: grandTotal > 1000 ? '4px' : 'inherit'
+                             }}>
+                               {formatMoney(Math.round(grandTotal * 1000))}
+                             </td>
+                             <td style={{ textAlign: 'center' }}>
                               {(!session?.settledPlayers || !session?.settledPlayers?.length) && (
                                 <button
                                   className="btn btn-danger-soft btn-sm"

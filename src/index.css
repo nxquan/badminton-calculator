@@ -599,7 +599,7 @@ body {
   font-family: var(--font-family-display);
   font-size: 1.15rem;
   font-weight: 800;
-  color: #0F172A;
+  color: var(--text);
   margin-bottom: 16px;
   display: flex;
   align-items: center;
@@ -626,7 +626,7 @@ body {
 .form-group label {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--text-secondary);
   letter-spacing: 0.01em;
 }
 
@@ -635,31 +635,31 @@ input[type="number"],
 input[type="text"],
 select {
   padding: 10px 14px;
-  background: #FFFFFF;
-  border: 1.5px solid #CBD5E1;
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
   font-family: var(--font-family-base);
   font-size: 0.92rem;
-  color: #0F172A;
+  color: var(--text);
   outline: none;
   transition: all 0.2s ease;
   width: 100%;
 }
 
 input::placeholder {
-  color: #94A3B8;
+  color: var(--text-secondary);
 }
 
 input:focus,
 select:focus {
   border-color: var(--color-court-green);
-  background: #FFFFFF;
+  background: var(--card-bg);
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
 select option {
-  background: #FFFFFF;
-  color: #0F172A;
+  background: var(--card-bg);
+  color: var(--text);
 }
 
 /* Buttons System */
@@ -743,9 +743,9 @@ select option {
 }
 
 .btn-outline:hover {
-  background: #F8FAFC;
-  border-color: #94A3B8;
-  color: #0F172A;
+  background: var(--bg);
+  border-color: var(--text-secondary);
+  color: var(--text);
 }
 
 .btn-outline-accent {
@@ -759,14 +759,14 @@ select option {
 }
 
 .btn-surface-strong {
-  background: #FFFFFF;
-  border: 1px solid #CBD5E1;
-  color: #0F172A;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
   box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05);
 }
 
 .btn-surface-strong:hover {
-  background: #F8FAFC;
+  background: var(--bg);
   border-color: #16A34A;
 }
 
@@ -819,9 +819,9 @@ select option {
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  border: 1.5px solid #CBD5E1;
-  background: #FFFFFF;
-  color: #334155;
+  border: 1.5px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
   transition: all 0.2s ease;
   user-select: none;
 }
@@ -829,7 +829,7 @@ select option {
 .people-chip:hover {
   border-color: #16A34A;
   color: #15803D;
-  background: #F0FDF4;
+  background: var(--color-court-green-soft);
   transform: translateY(-1px);
 }
 
@@ -858,17 +858,17 @@ select option {
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: #F8FAFC;
+  background: var(--bg);
   border-radius: var(--radius);
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
   gap: 12px;
   flex-wrap: wrap;
   transition: all 0.2s ease;
 }
 
 .entry-item:hover {
-  border-color: #CBD5E1;
-  background: #F1F5F9;
+  border-color: var(--border);
+  background: var(--card-bg);
 }
 
 .entry-info {
@@ -886,12 +886,12 @@ select option {
 .entry-amount {
   font-weight: 800;
   font-size: 1.05rem;
-  color: #0F172A;
+  color: var(--text);
 }
 
 .entry-people {
   font-size: 0.82rem;
-  color: #475569;
+  color: var(--text-secondary);
   margin-top: 3px;
 }
 
@@ -913,36 +913,36 @@ select option {
   font-size: 0.92rem;
   border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
 }
 
 .result-table th,
 .result-table td {
   padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid var(--border);
   word-break: break-word;
   overflow-wrap: break-word;
   white-space: normal;
 }
 
 .result-table th {
-  background: #F8FAFC;
+  background: var(--bg);
   font-family: var(--font-family-display);
   font-weight: 800;
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .result-table td {
-  background: #FFFFFF;
-  color: #0F172A;
+  background: var(--card-bg);
+  color: var(--text);
 }
 
 .result-table tr:hover td {
-  background: #F8FAFC;
+  background: var(--bg);
 }
 
 .result-table td:last-child,
@@ -953,13 +953,13 @@ select option {
 .result-total {
   font-weight: 800;
   font-size: 1.05rem;
-  background: #F0FDF4 !important;
+  background: var(--color-court-green-soft) !important;
 }
 
 .result-total td {
   border-top: 2px solid #16A34A;
   color: #15803D;
-  background: #F0FDF4 !important;
+  background: var(--color-court-green-soft) !important;
 }
 
 /* Actions Bar & Floating Sticky Bar */
@@ -976,10 +976,10 @@ select option {
   margin-bottom: 14px;
   padding: 10px 14px;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--card-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
 
@@ -997,10 +997,10 @@ select option {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--card-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
@@ -1020,9 +1020,9 @@ select option {
 .sidebar-submenu .sidebar-menu-btn {
   padding: 8px 12px;
   font-size: 0.85rem;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #F8FAFC;
+  background: var(--bg);
 }
 
 .sidebar-title {
@@ -1033,7 +1033,7 @@ select option {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #0F172A;
+  color: var(--text);
 }
 
 .sidebar-menu-btn {
@@ -1112,6 +1112,7 @@ select option {
   cursor: pointer;
   position: relative;
   width: fit-content;
+  user-select: none;
 }
 
 .settle-toggle-input {

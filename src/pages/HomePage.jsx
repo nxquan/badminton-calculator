@@ -316,7 +316,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             </div>
             <div>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Phiên cầu</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0F172A' }}>{sessions.length}</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>{sessions.length}</div>
               <div style={{ fontSize: '0.78rem', color: '#16A34A', fontWeight: 600 }}>
                 ~{monthlyData.filter(d => d.sessionCount > 0).length > 0 ? (sessions.length / monthlyData.filter(d => d.sessionCount > 0).length).toFixed(1) : 0} phiên/tháng
               </div>
@@ -331,7 +331,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             </div>
             <div>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Tổng kinh phí</div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0F172A' }}>
+              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>
                 {formatMoney(Math.round(totalClubExpense * 1000))}
               </div>
               <div style={{ fontSize: '0.78rem', color: '#D97706', fontWeight: 600 }}>Toàn bộ câu lạc bộ</div>
@@ -346,7 +346,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             </div>
             <div>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Tay vợt</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0F172A' }}>{players.length}</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>{players.length}</div>
               <div style={{ fontSize: '0.78rem', color: '#2563EB', fontWeight: 600 }}>Thành viên câu lạc bộ</div>
             </div>
           </div>
@@ -359,7 +359,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             </div>
             <div>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Tháng sôi nổi nhất</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>
                 {peakMonth && peakMonth.sessionCount > 0 ? formatFullMonth(peakMonth.monthKey) : '—'}
               </div>
               <div style={{ fontSize: '0.78rem', color: '#BE185D', fontWeight: 600 }}>
@@ -376,7 +376,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <BarChart3 size={20} style={{ color: '#16A34A' }} /> Biểu đồ Thống kê Tiến trình Phiên cầu & Chi tiêu theo Tháng
           </span>
-          <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
             Biểu đồ kết hợp Recharts (Đường & Diện tích)
           </div>
         </div>
@@ -395,13 +395,13 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                     <stop offset="95%" stopColor="#16A34A" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  stroke="#64748B"
+                  stroke="var(--text-secondary)"
                   fontSize={12}
                   tickLine={false}
-                  axisLine={{ stroke: '#E2E8F0' }}
+                  axisLine={{ stroke: 'var(--border)' }}
                 />
                 <YAxis
                   yAxisId="left"
@@ -409,7 +409,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                   fontSize={11}
                   tickFormatter={(val) => (val >= 1000 ? `${(val / 1000).toFixed(1)}M` : val > 0 ? `${Math.round(val)}k` : '0')}
                   tickLine={false}
-                  axisLine={{ stroke: '#E2E8F0' }}
+                  axisLine={{ stroke: 'var(--border)' }}
                 />
                 <YAxis
                   yAxisId="right"
@@ -418,10 +418,13 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                   fontSize={11}
                   allowDecimals={false}
                   tickLine={false}
-                  axisLine={{ stroke: '#E2E8F0' }}
+                  axisLine={{ stroke: 'var(--border)' }}
                 />
                 <Tooltip content={<HomePageChartTooltip />} />
-                <Legend wrapperStyle={{ paddingTop: 10, fontSize: '0.8rem' }} />
+                <Legend
+                  wrapperStyle={{ paddingTop: 10, fontSize: '0.8rem' }}
+                  formatter={(value) => <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{value}</span>}
+                />
                 <Area
                   yAxisId="left"
                   type="monotone"
@@ -447,7 +450,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                   name="Số phiên cầu"
                   stroke="#EA580C"
                   strokeWidth={3}
-                  dot={{ r: 4, fill: '#F97316', stroke: '#FFFFFF', strokeWidth: 2 }}
+                  dot={{ r: 4, fill: '#F97316', stroke: 'var(--card-bg)', strokeWidth: 2 }}
                   activeDot={{ r: 7, fill: '#EA580C' }}
                 />
               </ComposedChart>
@@ -462,7 +465,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <PieChart size={20} style={{ color: '#16A34A' }} /> Cơ cấu Kinh phí theo Loại khoản chi
           </span>
-          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#15803D', background: '#F0FDF4', padding: '4px 12px', borderRadius: 999, border: '1px solid #BBF7D0' }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-court-green)', background: 'var(--color-court-green-soft)', padding: '4px 12px', borderRadius: 999, border: '1px solid var(--border)' }}>
             Tổng: {formatMoney(expenseTypeBreakdown.grandTotalVND)}
           </div>
         </div>
@@ -474,7 +477,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Multi-segmented visual progress bar */}
-            <div style={{ width: '100%', height: 12, background: '#F1F5F9', borderRadius: 999, overflow: 'hidden', display: 'flex' }}>
+            <div style={{ width: '100%', height: 12, background: 'var(--border)', borderRadius: 999, overflow: 'hidden', display: 'flex' }}>
               {expenseTypeBreakdown.list.map((item, idx) => {
                 const colorPalette = ['#16A34A', '#2563EB', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B']
                 const color = colorPalette[idx % colorPalette.length]
@@ -497,12 +500,12 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
               {expenseTypeBreakdown.list.map((item, idx) => {
                 const colorPalette = [
-                  { bg: '#F0FDF4', border: '#BBF7D0', text: '#15803D', bar: '#16A34A' },
-                  { bg: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8', bar: '#2563EB' },
-                  { bg: '#FEF3C7', border: '#FDE68A', text: '#B45309', bar: '#F59E0B' },
-                  { bg: '#F3E8FF', border: '#E9D5FF', text: '#6B21A8', bar: '#8B5CF6' },
-                  { bg: '#FCE7F3', border: '#FBCFE8', text: '#9D174D', bar: '#EC4899' },
-                  { bg: '#CFFAFE', border: '#A5F3FC', text: '#0E7490', bar: '#06B6D4' },
+                  { bg: 'var(--color-court-green-soft)', border: 'var(--border)', text: '#16A34A', bar: '#16A34A' },
+                  { bg: 'var(--color-sports-blue-soft)', border: 'var(--border)', text: '#2563EB', bar: '#2563EB' },
+                  { bg: 'rgba(245, 158, 11, 0.12)', border: 'var(--border)', text: '#D97706', bar: '#F59E0B' },
+                  { bg: 'rgba(139, 92, 246, 0.12)', border: 'var(--border)', text: '#8B5CF6', bar: '#8B5CF6' },
+                  { bg: 'rgba(236, 72, 153, 0.12)', border: 'var(--border)', text: '#EC4899', bar: '#EC4899' },
+                  { bg: 'rgba(6, 182, 212, 0.12)', border: 'var(--border)', text: '#06B6D4', bar: '#06B6D4' },
                 ]
                 const theme = colorPalette[idx % colorPalette.length]
 
@@ -518,7 +521,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                     boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0F172A', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontSize: '1.1rem' }}>{item.emoji}</span> {item.label}
                       </span>
                       <span style={{
@@ -526,7 +529,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                         fontWeight: 800,
                         padding: '2px 8px',
                         borderRadius: 999,
-                        background: '#FFFFFF',
+                        background: 'var(--card-bg)',
                         color: theme.text,
                         border: `1px solid ${theme.border}`
                       }}>
@@ -541,7 +544,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                     </div>
 
                     {/* Progress bar per item */}
-                    <div style={{ width: '100%', height: 4, background: 'rgba(255, 255, 255, 0.7)', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: 4, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
                       <div style={{
                         width: `${item.percentage}%`,
                         height: '100%',
@@ -574,7 +577,7 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
         {/* Search & Filter Toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
           <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: '300px' }}>
-            <Search size={16} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+            <Search size={16} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
             <input
               type="text"
               placeholder="Tìm tay vợt..."
@@ -590,7 +593,9 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                 paddingBottom: 6,
                 fontSize: '0.84rem',
                 borderRadius: 8,
-                border: '1px solid #CBD5E1',
+                border: '1px solid var(--border)',
+                background: 'var(--card-bg)',
+                color: 'var(--text)',
                 width: '100%',
               }}
             />
@@ -605,9 +610,9 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                 borderRadius: 999,
                 fontSize: '0.78rem',
                 fontWeight: 700,
-                border: playerFilterPill === 'all' ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
-                background: playerFilterPill === 'all' ? '#F0FDF4' : '#FFFFFF',
-                color: playerFilterPill === 'all' ? '#15803D' : '#64748B',
+                border: playerFilterPill === 'all' ? '1.5px solid var(--color-court-green)' : '1px solid var(--border)',
+                background: playerFilterPill === 'all' ? 'var(--color-court-green-soft)' : 'var(--card-bg)',
+                color: playerFilterPill === 'all' ? 'var(--color-court-green)' : 'var(--text-secondary)',
                 cursor: 'pointer',
               }}
             >
@@ -621,9 +626,9 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                 borderRadius: 999,
                 fontSize: '0.78rem',
                 fontWeight: 700,
-                border: playerFilterPill === 'active' ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
-                background: playerFilterPill === 'active' ? '#F0FDF4' : '#FFFFFF',
-                color: playerFilterPill === 'active' ? '#15803D' : '#64748B',
+                border: playerFilterPill === 'active' ? '1.5px solid var(--color-court-green)' : '1px solid var(--border)',
+                background: playerFilterPill === 'active' ? 'var(--color-court-green-soft)' : 'var(--card-bg)',
+                color: playerFilterPill === 'active' ? 'var(--color-court-green)' : 'var(--text-secondary)',
                 cursor: 'pointer',
               }}
             >
@@ -645,8 +650,8 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                 return (
                   <div key={item.name} style={{
                     padding: '12px 16px',
-                    background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--border)',
                     borderRadius: 'var(--radius)',
                     display: 'flex',
                     flexDirection: 'column',
@@ -654,20 +659,20 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#64748B', width: 22 }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-secondary)', width: 22 }}>
                           {idx + 1}.
                         </span>
                         <PlayerAvatar player={item.player} size={38} />
                         <div>
-                          <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A' }}>{item.name}</div>
-                          <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+                          <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-text-primary)' }}>{item.name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
                             <span>🏸 {item.sessionCount}/{sessions.length} phiên</span>
                             <span style={{
                               fontWeight: 700,
                               padding: '1px 6px',
                               borderRadius: 4,
-                              background: rate >= 75 ? '#DCFCE7' : rate >= 40 ? '#FEF9C3' : '#F1F5F9',
-                              color: rate >= 75 ? '#15803D' : rate >= 40 ? '#854D0E' : '#475569',
+                              background: rate >= 75 ? 'rgba(34, 197, 94, 0.2)' : rate >= 40 ? 'rgba(245, 158, 11, 0.2)' : 'var(--border)',
+                              color: rate >= 75 ? 'var(--color-court-green)' : rate >= 40 ? '#D97706' : 'var(--text-secondary)',
                               fontSize: '0.72rem'
                             }}>
                               {rate.toFixed(1)}% tham gia
@@ -679,12 +684,12 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
                         <div style={{ fontWeight: 800, fontSize: '1rem', color: '#16A34A' }}>
                           {formatMoney(Math.round(item.totalSpent * 1000))}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Phần chi phí chia lẻ</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Phần chi phí chia lẻ</div>
                       </div>
                     </div>
 
                     {/* Visual Progress Bar */}
-                    <div style={{ width: '100%', height: 6, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
                       <div style={{
                         width: `${percentage}%`,
                         height: '100%',

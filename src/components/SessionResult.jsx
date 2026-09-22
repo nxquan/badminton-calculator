@@ -156,6 +156,42 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
     }
   }
 
+  const settlablePlayers = useMemo(() => {
+    return Object.entries(totals)
+      .filter(([name, amount]) => {
+        const paid = normalizedEntries
+          .filter((entry) => entry.payer === name)
+          .reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0)
+        const owe = amount - paid
+        return owe > 0
+      })
+      .map(([name]) => name)
+  }, [totals, normalizedEntries])
+
+  const allSettled = useMemo(() => {
+    return (
+      settlablePlayers.length > 0 &&
+      settlablePlayers.every((name) => settledPlayers.includes(name))
+    )
+  }, [settlablePlayers, settledPlayers])
+
+  const handleToggleAllSettled = () => {
+    let nextSettled
+    if (allSettled) {
+      const settlableSet = new Set(settlablePlayers)
+      nextSettled = settledPlayers.filter((p) => !settlableSet.has(p))
+    } else {
+      nextSettled = Array.from(new Set([...settledPlayers, ...settlablePlayers]))
+    }
+    setSettledPlayers(nextSettled)
+    if (onUpdateSession) {
+      onUpdateSession({
+        ...session,
+        settledPlayers: nextSettled,
+      })
+    }
+  }
+
   const handleSetTransferTo = (name) => {
     if (!canChangeTransferTo) return
     const nextVal = transferTo === name ? '' : name
@@ -716,10 +752,10 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
           <div
             style={{
               marginBottom: '16px',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)',
+              background: 'var(--bg)',
               padding: '12px 14px',
               borderRadius: '14px',
-              border: '1px solid #E2E8F0',
+              border: '1px solid var(--border)',
               boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
             }}
           >
@@ -734,7 +770,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1E293B' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text-primary)' }}>
                   🏦 Người nhận chuyển khoản
                 </span>
                 {transferTo && (
@@ -742,11 +778,11 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                     style={{
                       fontSize: '0.72rem',
                       fontWeight: 800,
-                      color: '#15803D',
-                      background: '#DCFCE7',
+                      color: 'var(--color-court-green)',
+                      background: 'var(--color-court-green-soft)',
                       padding: '2px 8px',
                       borderRadius: '999px',
-                      border: '1px solid #86EFAC',
+                      border: '1px solid var(--border)',
                     }}
                   >
                     {transferTo}
@@ -780,15 +816,15 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  border: (transferTo && includeQrCode) ? '1.5px solid #22C55E' : '1.5px solid #CBD5E1',
-                  background: '#FFFFFF',
-                  color: (transferTo && includeQrCode) ? '#15803D' : '#64748B',
+                  border: (transferTo && includeQrCode) ? '1.5px solid var(--color-court-green)' : '1.5px solid var(--border)',
+                  background: 'var(--card-bg)',
+                  color: (transferTo && includeQrCode) ? 'var(--color-court-green)' : 'var(--text-secondary)',
                   boxShadow: (transferTo && includeQrCode) ? '0 2px 8px rgba(34, 197, 94, 0.2)' : 'none',
                   transition: 'all 0.2s ease',
                   userSelect: 'none',
                 }}
               >
-                <QrCode size={15} color={(transferTo && includeQrCode) ? '#16A34A' : '#64748B'} />
+                <QrCode size={15} color={(transferTo && includeQrCode) ? 'var(--color-court-green)' : 'var(--text-secondary)'} />
                 <span>Kèm mã QR Bill</span>
 
                 {/* Switch Indicator */}
@@ -797,7 +833,7 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                     width: '32px',
                     height: '18px',
                     borderRadius: '999px',
-                    background: (transferTo && includeQrCode) ? '#16A34A' : '#CBD5E1',
+                    background: (transferTo && includeQrCode) ? 'var(--color-court-green)' : 'var(--border)',
                     position: 'relative',
                     display: 'inline-block',
                     transition: 'background 0.2s ease',
@@ -856,7 +892,28 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                   </th>
                 ))}
                 {transferTo && <th style={{ color: 'var(--color-accent)' }}>Chuyển cho {transferTo}</th>}
-                <th>Đánh dấu</th>
+                <th style={{ textAlign: 'left', paddingLeft: '8px', width: '130px', minWidth: '130px' }}>
+                  {settlablePlayers.length > 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', width: '130px' }}>
+                      <label className="settle-toggle" title={allSettled ? 'Bỏ chọn tất cả' : 'Chọn tất cả đã thanh toán'} style={{ gap: '6px' }}>
+                        <input
+                          type="checkbox"
+                          className="settle-toggle-input"
+                          checked={allSettled}
+                          onChange={handleToggleAllSettled}
+                        />
+                        <span className="settle-toggle-box" aria-hidden="true" style={{ width: '18px', height: '18px', fontSize: '0.75rem' }}>
+                          ✓
+                        </span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, userSelect: 'none' }}>
+                          Tất cả
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <span>Đánh dấu</span>
+                  )}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -915,10 +972,10 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                           )}
                         </td>
                       )}
-                      <td style={{ textAlign: 'left', paddingLeft: '8px' }}>
+                      <td style={{ textAlign: 'left', paddingLeft: '8px', width: '130px', minWidth: '130px' }}>
                         {canSettle ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-start', width: '100%', minWidth: '96px' }}>
-                            <label className="settle-toggle" aria-label={`Đánh dấu ${name} đã thanh toán`}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', width: '100%', minWidth: '96px' }}>
+                            <label className="settle-toggle" aria-label={`Đánh dấu ${name} đã thanh toán`} style={{ gap: '6px' }}>
                               <input
                                 type="checkbox"
                                 className="settle-toggle-input"
@@ -928,19 +985,20 @@ export default function SessionResult({ session, expenseTypes, onBack, onUpdateS
                               <span className="settle-toggle-box" aria-hidden="true">
                                 ✓
                               </span>
+                              <span
+                                style={{
+                                  fontSize: '0.8rem',
+                                  fontWeight: 600,
+                                  color: isSettled ? 'var(--success)' : 'var(--danger)',
+                                  minWidth: '60px',
+                                  textAlign: 'left',
+                                  display: 'inline-block',
+                                  userSelect: 'none',
+                                }}
+                              >
+                                {isSettled ? 'Paid' : 'Pending'}
+                              </span>
                             </label>
-                            <span
-                              style={{
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                color: isSettled ? 'var(--success)' : 'var(--danger)',
-                                minWidth: '62px',
-                                textAlign: 'left',
-                                display: 'inline-block',
-                              }}
-                            >
-                              {isSettled ? 'Paid' : 'Pending'}
-                            </span>
                           </div>
                         ) : (
                           <span style={{ color: 'var(--text-secondary)' }}>—</span>

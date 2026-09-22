@@ -62,6 +62,35 @@ export default function App() {
     return localStorage.getItem('badminton_app_theme') || 'system'
   })
   const importRef = useRef(null)
+  const lastNavStateRef = useRef({ view: 'home', scrollTop: 0 })
+
+  const handleViewSession = useCallback((s) => {
+    const contentEl = document.querySelector('.app-content')
+    const currentScrollTop = contentEl ? contentEl.scrollTop : 0
+    lastNavStateRef.current = {
+      view: sidebarView.view,
+      scrollTop: currentScrollTop,
+    }
+    setViewingSession(s)
+    setSidebarView({ view: 'session', session: s })
+  }, [sidebarView.view])
+
+  const handleBackFromSessionDetail = useCallback(() => {
+    const previousView = lastNavStateRef.current.view || 'home'
+    const previousScrollTop = lastNavStateRef.current.scrollTop || 0
+
+    setViewingSession(null)
+    setSidebarView({ view: previousView, session: null })
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const contentEl = document.querySelector('.app-content')
+        if (contentEl) {
+          contentEl.scrollTop = previousScrollTop
+        }
+      }, 50)
+    })
+  }, [])
 
   useEffect(() => {
     const applyTheme = () => {
@@ -502,7 +531,7 @@ export default function App() {
     setIsAddSessionModalOpen(false)
     if (!isEditingSessionInModal) {
       setViewingSession(null)
-      setSidebarView({ view: 'sessions', session: null })
+      setSidebarView({ view: lastNavStateRef.current.view || 'sessions', session: null })
     }
     setIsEditingSessionInModal(false)
   }, [isEditingSessionInModal])
@@ -896,7 +925,7 @@ export default function App() {
                 players={players}
                 expenseTypes={expenseTypes}
                 onNewSession={handleNewSession}
-                onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
+                onViewSession={handleViewSession}
                 onNavigateTab={(view) => setSidebarView({ view, session: null })}
               />
             )}
@@ -905,7 +934,7 @@ export default function App() {
                 sessions={sessions}
                 players={players}
                 expenseTypes={expenseTypes}
-                onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
+                onViewSession={handleViewSession}
                 onDeleteSession={handleDeleteSession}
                 onNewSession={handleNewSession}
                 onSyncPlayers={() => syncPlayersForNames(getSessionPeople(sessions))}
@@ -914,7 +943,7 @@ export default function App() {
             {sidebarView.view === 'match-history' && (
               <MatchHistoryPage
                 sessions={sessions}
-                onViewSession={(s) => { setViewingSession(s); setSidebarView({ view: 'session', session: s }) }}
+                onViewSession={handleViewSession}
               />
             )}
             {sidebarView.view === 'session' && viewingSession && (
@@ -922,7 +951,7 @@ export default function App() {
                 session={viewingSession}
                 expenseTypes={expenseTypes}
                 players={players}
-                onBack={() => { setViewingSession(null); setSidebarView({ view: 'sessions', session: null }) }}
+                onBack={handleBackFromSessionDetail}
                 onUpdateSession={handleUpdateSession}
                 onEditSession={handleEditSession}
               />

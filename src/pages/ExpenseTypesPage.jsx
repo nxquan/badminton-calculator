@@ -81,10 +81,10 @@ export default function ExpenseTypesPage({
         gap: 10,
         alignItems: 'center',
         justifyContent: 'space-between',
-        background: '#F8FAFC',
+        background: 'var(--bg)',
         padding: '10px 14px',
         borderRadius: 'var(--radius)',
-        border: '1px solid #E2E8F0',
+        border: '1px solid var(--border)',
         marginBottom: 14
       }}>
         {/* Search Input */}
@@ -94,23 +94,23 @@ export default function ExpenseTypesPage({
           gap: 8,
           flex: '1 1 200px',
           minWidth: 180,
-          background: '#FFFFFF',
-          border: '1.5px solid #CBD5E1',
+          background: 'var(--card-bg)',
+          border: '1.5px solid var(--border)',
           borderRadius: 'var(--radius)',
           padding: '5px 10px'
         }}>
-          <Search size={15} style={{ color: '#94A3B8', flexShrink: 0 }} />
+          <Search size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
           <input
             type="text"
             placeholder="Tìm loại chi phí..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ border: 'none', background: 'transparent', padding: 0, outline: 'none', fontSize: '0.85rem', width: '100%', color: '#0F172A' }}
+            style={{ border: 'none', background: 'transparent', padding: 0, outline: 'none', fontSize: '0.85rem', width: '100%', color: 'var(--text)' }}
           />
         </div>
 
         {/* Filter Status Pills */}
-        <div style={{ display: 'flex', gap: 4, background: '#FFFFFF', padding: 3, border: '1px solid #CBD5E1', borderRadius: 'var(--radius)' }}>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--card-bg)', padding: 3, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
           <button
             type="button"
             onClick={() => setFilterStatus('all')}
@@ -121,8 +121,8 @@ export default function ExpenseTypesPage({
               fontSize: '0.78rem',
               fontWeight: 700,
               cursor: 'pointer',
-              background: filterStatus === 'all' ? '#16A34A' : 'transparent',
-              color: filterStatus === 'all' ? '#FFFFFF' : '#475569',
+              background: filterStatus === 'all' ? 'var(--color-court-green)' : 'transparent',
+              color: filterStatus === 'all' ? '#FFFFFF' : 'var(--text-secondary)',
               transition: 'all 0.15s ease'
             }}
           >
@@ -138,8 +138,8 @@ export default function ExpenseTypesPage({
               fontSize: '0.78rem',
               fontWeight: 700,
               cursor: 'pointer',
-              background: filterStatus === 'used' ? '#16A34A' : 'transparent',
-              color: filterStatus === 'used' ? '#FFFFFF' : '#475569',
+              background: filterStatus === 'used' ? 'var(--color-court-green)' : 'transparent',
+              color: filterStatus === 'used' ? '#FFFFFF' : 'var(--text-secondary)',
               transition: 'all 0.15s ease'
             }}
           >
@@ -155,8 +155,8 @@ export default function ExpenseTypesPage({
               fontSize: '0.78rem',
               fontWeight: 700,
               cursor: 'pointer',
-              background: filterStatus === 'unused' ? '#16A34A' : 'transparent',
-              color: filterStatus === 'unused' ? '#FFFFFF' : '#475569',
+              background: filterStatus === 'unused' ? 'var(--color-court-green)' : 'transparent',
+              color: filterStatus === 'unused' ? '#FFFFFF' : 'var(--text-secondary)',
               transition: 'all 0.15s ease'
             }}
           >
@@ -186,8 +186,8 @@ export default function ExpenseTypesPage({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '9px 12px',
-                  background: isUsed ? '#F8FAFC' : '#FFFFFF',
-                  border: isUsed ? '1px solid #E2E8F0' : '1px solid #CBD5E1',
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--border)',
                   borderRadius: 'var(--radius)',
                   transition: 'all 0.15s ease',
                   boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)'
@@ -198,8 +198,8 @@ export default function ExpenseTypesPage({
                       width: 36,
                       height: 36,
                       borderRadius: 10,
-                      background: '#FFFFFF',
-                      border: '1px solid #E2E8F0',
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -212,7 +212,7 @@ export default function ExpenseTypesPage({
                       <div style={{
                         fontWeight: 700,
                         fontSize: '0.9rem',
-                        color: '#0F172A',
+                        color: 'var(--color-text-primary)',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
@@ -222,7 +222,7 @@ export default function ExpenseTypesPage({
                       <div style={{
                         fontSize: '0.68rem',
                         fontWeight: 600,
-                        color: isUsed ? '#16A34A' : '#94A3B8',
+                        color: isUsed ? 'var(--color-court-green)' : 'var(--text-muted)',
                         marginTop: 1,
                         display: 'inline-flex',
                         alignItems: 'center',

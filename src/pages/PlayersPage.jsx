@@ -125,27 +125,27 @@ export default function PlayersPage({
         gap: 12,
         alignItems: 'center',
         justifyContent: 'space-between',
-        background: '#F8FAFC',
+        background: 'var(--bg)',
         padding: '12px 16px',
         borderRadius: 'var(--radius)',
-        border: '1px solid #E2E8F0',
+        border: '1px solid var(--border)',
         marginBottom: 16
       }}>
         {/* Search Input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 240px', minWidth: 200, background: '#FFFFFF', border: '1.5px solid #CBD5E1', borderRadius: 'var(--radius)', padding: '6px 12px' }}>
-          <Search size={16} style={{ color: '#94A3B8', flexShrink: 0 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 240px', minWidth: 200, background: 'var(--card-bg)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '6px 12px' }}>
+          <Search size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
           <input
             type="text"
             placeholder="Tìm kiếm theo tên tay vợt..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ border: 'none', background: 'transparent', padding: 0, outline: 'none', fontSize: '0.88rem', width: '100%', color: '#0F172A' }}
+            style={{ border: 'none', background: 'transparent', padding: 0, outline: 'none', fontSize: '0.88rem', width: '100%', color: 'var(--text)' }}
           />
         </div>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Activity Status Filter Pills */}
-          <div style={{ display: 'flex', gap: 4, background: '#FFFFFF', padding: 3, border: '1px solid #CBD5E1', borderRadius: 'var(--radius)' }}>
+          <div style={{ display: 'flex', gap: 4, background: 'var(--card-bg)', padding: 3, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
             <button
               type="button"
               onClick={() => setFilterActivity('all')}
@@ -156,8 +156,8 @@ export default function PlayersPage({
                 fontSize: '0.78rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                background: filterActivity === 'all' ? '#16A34A' : 'transparent',
-                color: filterActivity === 'all' ? '#FFFFFF' : '#475569',
+                background: filterActivity === 'all' ? 'var(--color-court-green)' : 'transparent',
+                color: filterActivity === 'all' ? '#FFFFFF' : 'var(--text-secondary)',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -173,8 +173,8 @@ export default function PlayersPage({
                 fontSize: '0.78rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                background: filterActivity === 'active' ? '#16A34A' : 'transparent',
-                color: filterActivity === 'active' ? '#FFFFFF' : '#475569',
+                background: filterActivity === 'active' ? 'var(--color-court-green)' : 'transparent',
+                color: filterActivity === 'active' ? '#FFFFFF' : 'var(--text-secondary)',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -190,8 +190,8 @@ export default function PlayersPage({
                 fontSize: '0.78rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                background: filterActivity === 'inactive' ? '#16A34A' : 'transparent',
-                color: filterActivity === 'inactive' ? '#FFFFFF' : '#475569',
+                background: filterActivity === 'inactive' ? 'var(--color-court-green)' : 'transparent',
+                color: filterActivity === 'inactive' ? '#FFFFFF' : 'var(--text-secondary)',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -201,7 +201,7 @@ export default function PlayersPage({
 
           {/* Sort Dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <ArrowUpDown size={15} style={{ color: '#64748B' }} />
+            <ArrowUpDown size={15} style={{ color: 'var(--text-secondary)' }} />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -250,8 +250,8 @@ export default function PlayersPage({
                   flexDirection: 'column',
                   gap: 10,
                   padding: 14,
-                  background: isTopRanked ? '#F0FDF4' : '#FFFFFF',
-                  border: isTopRanked ? '1.5px solid #86EFAC' : '1px solid #E2E8F0',
+                  background: isTopRanked ? 'var(--color-court-green-soft)' : 'var(--card-bg)',
+                  border: isTopRanked ? '1.5px solid var(--color-court-green)' : '1px solid var(--border)',
                   borderRadius: 'var(--radius)',
                   boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)',
                   transition: 'all 0.2s ease',
@@ -263,7 +263,7 @@ export default function PlayersPage({
                     
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-                        <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {p.name}
                         </span>
                         {isTopRanked && (
@@ -272,8 +272,8 @@ export default function PlayersPage({
                             fontWeight: 800,
                             padding: '1px 6px',
                             borderRadius: 999,
-                            background: idx === 0 ? '#FEF3C7' : idx === 1 ? '#F1F5F9' : '#FFEDD5',
-                            color: idx === 0 ? '#B45309' : idx === 1 ? '#475569' : '#C2410C',
+                            background: idx === 0 ? 'rgba(254, 243, 199, 0.3)' : idx === 1 ? 'rgba(241, 245, 249, 0.2)' : 'rgba(255, 237, 213, 0.3)',
+                            color: idx === 0 ? '#D97706' : idx === 1 ? 'var(--text-secondary)' : '#EA580C',
                             border: '1px solid currentColor',
                             flexShrink: 0
                           }}>
@@ -282,7 +282,7 @@ export default function PlayersPage({
                         )}
                       </div>
 
-                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: totalSpent > 0 ? '#16A34A' : '#94A3B8', marginTop: 2 }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: totalSpent > 0 ? 'var(--color-court-green)' : 'var(--text-muted)', marginTop: 2 }}>
                         {totalSpent > 0 ? formatMoney(Math.round(totalSpent * 1000)) : 'Chưa có chi tiêu'}
                       </div>
                     </div>
@@ -302,17 +302,17 @@ export default function PlayersPage({
                   </div>
 
                   {/* Stats & Participation Rate % Bar */}
-                  <div style={{ borderTop: '1px dashed #E2E8F0', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', color: '#64748B' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: isActive ? 700 : 500, color: isActive ? '#15803D' : '#94A3B8' }}>
+                  <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--color-court-green)' : 'var(--text-muted)' }}>
                         <Activity size={13} /> {totalGames}/{totalClubSessions} phiên ({avgMonth}/tháng)
                       </span>
-                      <span style={{ fontWeight: 800, color: participationRate >= 75 ? '#15803D' : participationRate >= 40 ? '#B45309' : '#64748B' }}>
+                      <span style={{ fontWeight: 800, color: participationRate >= 75 ? 'var(--color-court-green)' : participationRate >= 40 ? '#D97706' : 'var(--text-secondary)' }}>
                         {participationRate.toFixed(1)}% tham gia
                       </span>
                     </div>
 
-                    <div style={{ width: '100%', height: 6, background: '#F1F5F9', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%',
                         width: `${Math.min(participationRate, 100)}%`,

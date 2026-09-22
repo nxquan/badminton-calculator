@@ -197,6 +197,28 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
     )
   }
 
+  const settlablePlayers = useMemo(() => {
+    return aggregatedPlayersData
+      .filter((p) => p.name !== transferTo && p.netOwe > 0)
+      .map((p) => p.name)
+  }, [aggregatedPlayersData, transferTo])
+
+  const allSettled = useMemo(() => {
+    return (
+      settlablePlayers.length > 0 &&
+      settlablePlayers.every((name) => settledPlayers.includes(name))
+    )
+  }, [settlablePlayers, settledPlayers])
+
+  const handleToggleAllSettled = () => {
+    if (allSettled) {
+      const settlableSet = new Set(settlablePlayers)
+      setSettledPlayers((prev) => prev.filter((p) => !settlableSet.has(p)))
+    } else {
+      setSettledPlayers((prev) => Array.from(new Set([...prev, ...settlablePlayers])))
+    }
+  }
+
   // Combined Image Export Generator
   const generateConsolidatedBillImage = async () => {
     const wrapper = document.createElement('div')
@@ -451,10 +473,10 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
             <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#16A34A', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               ⚡ SMASH CALCULATOR — TÍNH TIỀN GỘP
             </div>
-            <h2 style={{ margin: '4px 0 0 0', fontSize: '1.4rem', fontWeight: 800, color: '#0F172A' }}>
+            <h2 style={{ margin: '4px 0 0 0', fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>
               Phiếu Tính Tiền Gộp ({normalizedSessions.length} phiên cầu)
             </h2>
-            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748B' }}>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               📅 Các phiên chọn: {dateRangeLabel}
             </p>
           </div>
@@ -480,21 +502,21 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
         >
           {/* 3 Metric Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', padding: '12px 16px', borderRadius: 14 }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#15803D' }}>💵 TỔNG KINH PHÍ GỘP</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+          <div style={{ background: 'var(--color-court-green-soft)', border: '1px solid var(--border)', padding: '12px 16px', borderRadius: 14 }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16A34A' }}>💵 TỔNG KINH PHÍ GỘP</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-text-primary)', marginTop: 2 }}>
               {formatMoney(Math.round(combinedTotal * 1000))}
             </div>
           </div>
-          <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', padding: '12px 16px', borderRadius: 14 }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#B45309' }}>🏸 SỐ PHIÊN CẦU GỘP</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+          <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--border)', padding: '12px 16px', borderRadius: 14 }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#D97706' }}>🏸 SỐ PHIÊN CẦU GỘP</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-text-primary)', marginTop: 2 }}>
               {normalizedSessions.length} phiên cầu
             </div>
           </div>
-          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '12px 16px', borderRadius: 14 }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1D4ED8' }}>👥 THÀNH VIÊN THAM GIA</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+          <div style={{ background: 'var(--color-sports-blue-soft)', border: '1px solid var(--border)', padding: '12px 16px', borderRadius: 14 }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563EB' }}>👥 THÀNH VIÊN THAM GIA</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-text-primary)', marginTop: 2 }}>
               {actualParticipants.length} người
             </div>
           </div>
@@ -511,7 +533,7 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
         }}>
           {/* Column 1: Detailed Breakdown per Session */}
           <div>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0F172A', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
               <FileText size={18} style={{ color: '#16A34A' }} /> Chi tiết khoản chi từng phiên
             </h3>
 
@@ -519,12 +541,12 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
               {normalizedSessions.map((session, sIdx) => {
                 const isCollapsed = collapsedSessions[session.id]
                 return (
-                  <div key={session.id} style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', background: '#FFFFFF' }}>
+                  <div key={session.id} style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: 'var(--card-bg)' }}>
                     <div
                       onClick={() => toggleSessionCollapse(session.id)}
                       style={{
                         padding: '10px 14px',
-                        background: '#F8FAFC',
+                        background: 'var(--bg)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
@@ -533,10 +555,10 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#0F172A' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--color-text-primary)' }}>
                           Phiên #{sIdx + 1}: {formatSessionTitleDate(session.date)}
                         </span>
-                        <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                           ({session.normalizedEntries.length} khoản chi)
                         </span>
                       </div>
@@ -597,11 +619,11 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
 
           {/* Column 2: Combined Settlement Table */}
           <div>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0F172A', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Calculator size={18} style={{ color: '#16A34A' }} /> Bảng Tổng Hợp Tiền Cho Từng Người ({normalizedSessions.length} phiên)
             </h3>
 
-            <div className="table-wrap" style={{ background: '#FFFFFF', borderRadius: 12 }}>
+            <div className="table-wrap" style={{ background: 'var(--card-bg)', borderRadius: 12 }}>
               <table className="result-table result-table-split" style={{ marginBottom: 0, tableLayout: 'fixed', width: '100%' }}>
                 <colgroup>
                   <col style={{ width: '24%' }} />
@@ -617,13 +639,34 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
                     <th style={{ textAlign: 'right' }}>Đã ứng trước</th>
                     {transferTo ? (
                       <th style={{ color: 'var(--color-accent)', textAlign: 'right', lineHeight: 1.25, padding: '8px 10px' }}>
-                        <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 700 }}>CHUYỂN CHO</div>
-                        <div style={{ color: '#15803D', fontWeight: 800, wordBreak: 'break-word' }}>{transferTo}</div>
+                        <div style={{ fontSize: '0.66rem', color: 'var(--text-secondary)', fontWeight: 700 }}>CHUYỂN CHO</div>
+                        <div style={{ color: 'var(--color-court-green)', fontWeight: 800, wordBreak: 'break-word' }}>{transferTo}</div>
                       </th>
                     ) : (
                       <th style={{ textAlign: 'right' }}>Cần chuyển</th>
                     )}
-                    <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Đánh dấu</th>
+                    <th style={{ textAlign: 'center', whiteSpace: 'nowrap', width: '130px', minWidth: '130px' }}>
+                      {settlablePlayers.length > 0 ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '130px' }}>
+                          <label className="settle-toggle" title={allSettled ? 'Bỏ chọn tất cả' : 'Chọn tất cả đã thanh toán'} style={{ gap: '6px' }}>
+                            <input
+                              type="checkbox"
+                              className="settle-toggle-input"
+                              checked={allSettled}
+                              onChange={handleToggleAllSettled}
+                            />
+                            <span className="settle-toggle-box" aria-hidden="true" style={{ width: '18px', height: '18px', fontSize: '0.75rem' }}>
+                              ✓
+                            </span>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, userSelect: 'none' }}>
+                              Tất cả
+                            </span>
+                          </label>
+                        </div>
+                      ) : (
+                        <span>Đánh dấu</span>
+                      )}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -644,7 +687,7 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
                         <td style={{ color: 'var(--color-accent-dark)', fontWeight: 700, textAlign: 'right', wordBreak: 'break-word' }}>
                           {formatMoney(Math.round(p.totalShare * 1000))}
                         </td>
-                        <td style={{ color: '#64748B', fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>
+                        <td style={{ color: 'var(--text-secondary)', fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>
                           {p.totalPaid > 0 ? formatMoney(Math.round(p.totalPaid * 1000)) : '-'}
                         </td>
                         <td style={{ textAlign: 'right', wordBreak: 'break-word' }}>
@@ -664,12 +707,12 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
                             <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Đã hòa</span>
                           )}
                         </td>
-                        <td style={{ textAlign: 'center', paddingLeft: '4px', paddingRight: '4px' }}>
+                        <td style={{ textAlign: 'center', paddingLeft: '4px', paddingRight: '4px', width: '130px', minWidth: '130px' }}>
                           {isTransferTarget ? (
-                            <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '0.78rem', background: '#DCFCE7', padding: '2px 8px', borderRadius: '999px', display: 'inline-block' }}>✓ Người nhận</span>
+                            <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '0.78rem', background: 'var(--color-court-green-soft)', padding: '2px 8px', borderRadius: '999px', display: 'inline-block' }}>✓ Người nhận</span>
                           ) : canSettle ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                              <label className="settle-toggle" aria-label={`Đánh dấu ${p.name} đã thanh toán`}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <label className="settle-toggle" aria-label={`Đánh dấu ${p.name} đã thanh toán`} style={{ gap: '6px' }}>
                                 <input
                                   type="checkbox"
                                   className="settle-toggle-input"
@@ -679,10 +722,10 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
                                 <span className="settle-toggle-box" aria-hidden="true">
                                   ✓
                                 </span>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: isSettled ? 'var(--success)' : 'var(--danger)', userSelect: 'none', display: 'inline-block', minWidth: '58px', textAlign: 'left' }}>
+                                  {isSettled ? 'Paid' : 'Pending'}
+                                </span>
                               </label>
-                              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: isSettled ? 'var(--success)' : 'var(--danger)' }}>
-                                {isSettled ? 'Paid' : 'Pending'}
-                              </span>
                             </div>
                           ) : (
                             <span style={{ color: 'var(--text-secondary)' }}>—</span>
@@ -708,9 +751,9 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
         <div
           style={{
             flexShrink: 0,
-            borderTop: '1.5px solid #E2E8F0',
+            borderTop: '1.5px solid var(--border)',
             paddingTop: 12,
-            background: '#FFFFFF',
+            background: 'var(--card-bg)',
             display: 'flex',
             flexDirection: 'column',
             gap: 12,
@@ -720,8 +763,8 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
           <div
             style={{
               padding: '10px 14px',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)',
-              border: '1px solid #CBD5E1',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
               borderRadius: 14,
               display: 'flex',
               alignItems: 'center',
@@ -731,7 +774,7 @@ export default function ConsolidateSessionsModal({ sessions = [], players = [], 
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1 }}>
-              <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#0F172A', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 <Wallet size={16} style={{ color: '#16A34A' }} /> Người nhận CK gộp:
               </span>
 

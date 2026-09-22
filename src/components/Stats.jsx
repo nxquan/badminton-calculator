@@ -61,7 +61,7 @@ function CustomChartTooltip({ active, payload, label }) {
 function TrendLineChart({ data, groupMode }) {
   if (!data || data.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px 20px', color: '#94A3B8', fontSize: '0.88rem' }}>
+      <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
         Chưa có dữ liệu tiến trình phát triển.
       </div>
     )
@@ -84,13 +84,13 @@ function TrendLineChart({ data, groupMode }) {
               <stop offset="95%" stopColor="#16A34A" stopOpacity={0.0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="label"
-            stroke="#64748B"
+            stroke="var(--text-secondary)"
             fontSize={12}
             tickLine={false}
-            axisLine={{ stroke: '#E2E8F0' }}
+            axisLine={{ stroke: 'var(--border)' }}
           />
           <YAxis
             yAxisId="left"
@@ -98,15 +98,15 @@ function TrendLineChart({ data, groupMode }) {
             fontSize={11}
             tickFormatter={formatYAxisMoney}
             tickLine={false}
-            axisLine={{ stroke: '#E2E8F0' }}
+            axisLine={{ stroke: 'var(--border)' }}
           />
           <YAxis
             yAxisId="right"
             orientation="right"
-            stroke="#2563EB"
+            stroke="#38BDF8"
             fontSize={11}
             tickLine={false}
-            axisLine={{ stroke: '#E2E8F0' }}
+            axisLine={{ stroke: 'var(--border)' }}
             allowDecimals={false}
           />
           <Tooltip content={<CustomChartTooltip />} />
@@ -115,6 +115,7 @@ function TrendLineChart({ data, groupMode }) {
             align="right"
             iconType="circle"
             wrapperStyle={{ fontSize: '0.8rem', paddingBottom: 10 }}
+            formatter={(value) => <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{value}</span>}
           />
           <Area
             yAxisId="left"
@@ -132,9 +133,9 @@ function TrendLineChart({ data, groupMode }) {
             type="monotone"
             dataKey="count"
             name="Số phiên cầu"
-            stroke="#2563EB"
+            stroke="#38BDF8"
             strokeWidth={2.5}
-            dot={{ r: 4, fill: '#FFFFFF', stroke: '#2563EB', strokeWidth: 2 }}
+            dot={{ r: 4, fill: 'var(--card-bg)', stroke: '#38BDF8', strokeWidth: 2 }}
             activeDot={{ r: 6 }}
           />
           <Line
@@ -145,7 +146,7 @@ function TrendLineChart({ data, groupMode }) {
             stroke="#EA580C"
             strokeWidth={2}
             strokeDasharray="4 4"
-            dot={{ r: 3, fill: '#FFFFFF', stroke: '#EA580C', strokeWidth: 1.5 }}
+            dot={{ r: 3, fill: 'var(--card-bg)', stroke: '#EA580C', strokeWidth: 1.5 }}
           />
         </ComposedChart>
       </ResponsiveContainer>
@@ -376,7 +377,7 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
           </span>
 
           {/* Toggle Switch Theo Tháng / Theo Năm */}
-          <div style={{ display: 'inline-flex', background: '#F1F5F9', padding: '3px', borderRadius: '999px', border: '1px solid #E2E8F0' }}>
+          <div style={{ display: 'inline-flex', background: 'var(--bg)', padding: '3px', borderRadius: '999px', border: '1px solid var(--border)' }}>
             <button
               type="button"
               onClick={() => setTrendGroupMode('month')}
@@ -387,8 +388,8 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                 fontWeight: 700,
                 border: 'none',
                 cursor: 'pointer',
-                background: trendGroupMode === 'month' ? '#FFFFFF' : 'transparent',
-                color: trendGroupMode === 'month' ? '#15803D' : '#64748B',
+                background: trendGroupMode === 'month' ? 'var(--card-bg)' : 'transparent',
+                color: trendGroupMode === 'month' ? 'var(--color-court-green)' : 'var(--text-secondary)',
                 boxShadow: trendGroupMode === 'month' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -405,8 +406,8 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
                 fontWeight: 700,
                 border: 'none',
                 cursor: 'pointer',
-                background: trendGroupMode === 'year' ? '#FFFFFF' : 'transparent',
-                color: trendGroupMode === 'year' ? '#15803D' : '#64748B',
+                background: trendGroupMode === 'year' ? 'var(--card-bg)' : 'transparent',
+                color: trendGroupMode === 'year' ? 'var(--color-court-green)' : 'var(--text-secondary)',
                 boxShadow: trendGroupMode === 'year' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -418,29 +419,29 @@ export default function Stats({ sessions, expenseTypes = [], players = [] }) {
 
         {/* Dynamic Metric Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
-          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', padding: '10px 14px', borderRadius: 12 }}>
-            <div style={{ fontSize: '0.72rem', color: '#15803D', fontWeight: 700 }}>📈 TỔNG KINH PHÍ TIẾN TRÌNH</div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+          <div style={{ background: 'var(--color-court-green-soft)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 12 }}>
+            <div style={{ fontSize: '0.72rem', color: '#16A34A', fontWeight: 700 }}>📈 TỔNG KINH PHÍ TIẾN TRÌNH</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text-primary)', marginTop: 2 }}>
               {formatMoney(Math.round(trendSummary.totalSpent * 1000))}
             </div>
           </div>
-          <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', padding: '10px 14px', borderRadius: 12 }}>
-            <div style={{ fontSize: '0.72rem', color: '#B45309', fontWeight: 700 }}>
+          <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 12 }}>
+            <div style={{ fontSize: '0.72rem', color: '#D97706', fontWeight: 700 }}>
               🏆 KỲ CAO NHẤT {trendSummary.peak ? `(${trendSummary.peak.label})` : ''}
             </div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text-primary)', marginTop: 2 }}>
               {trendSummary.peak ? formatMoney(Math.round(trendSummary.peak.total * 1000)) : '0 VND'}
             </div>
           </div>
-          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '10px 14px', borderRadius: 12 }}>
-            <div style={{ fontSize: '0.72rem', color: '#1D4ED8', fontWeight: 700 }}>⚡ TRUNG BÌNH MỖI KỲ</div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+          <div style={{ background: 'var(--color-sports-blue-soft)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 12 }}>
+            <div style={{ fontSize: '0.72rem', color: '#2563EB', fontWeight: 700 }}>⚡ TRUNG BÌNH MỖI KỲ</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text-primary)', marginTop: 2 }}>
               {formatMoney(Math.round(trendSummary.avgPerPeriod * 1000))}
             </div>
           </div>
-          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '10px 14px', borderRadius: 12 }}>
-            <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 700 }}>🏸 TỔNG SỐ PHIÊN</div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 12 }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 700 }}>🏸 TỔNG SỐ PHIÊN</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text-primary)', marginTop: 2 }}>
               {trendSummary.totalSessions} phiên cầu
             </div>
           </div>
