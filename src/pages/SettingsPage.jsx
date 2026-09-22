@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react'
-import { Settings, CreditCard, Sparkles, Save, Check, RefreshCw, Users, Shuffle } from 'lucide-react'
+import { Settings, CreditCard, Sparkles, Save, Check, RefreshCw, Users, Shuffle, Palette, Sun, Moon, Monitor } from 'lucide-react'
 import PlayerAvatar from '../components/PlayerAvatar'
 import { CARTOON_AVATAR_STYLES, getRandomCartoonAvatarUrl } from '../utils/avatarUtils'
 
 export default function SettingsPage({
   players = [],
   settings = { defaultPayer: '' },
+  theme = 'system',
+  onSelectTheme,
   onSaveSettings,
   onUpdatePlayerAvatar,
   onBulkUpdateAvatars,
@@ -73,11 +75,65 @@ export default function SettingsPage({
           <div>
             <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: 'white' }}>Cài Đặt Hệ Thống</h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.88rem', opacity: 0.9 }}>
-              Tùy chỉnh người trả mặc định khi tạo phiên cầu mới & Quản lý Avatar hoạt hình ngẫu nhiên cho vận động viên
+              Tùy chỉnh giao diện Sáng / Tối, người trả mặc định & Quản lý Avatar cho tay vợt
             </p>
           </div>
         </div>
       </div>
+
+      {/* Section 0: Theme Settings */}
+      <div className="card">
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Palette size={22} style={{ color: '#8B5CF6' }} />
+          <span>Giao Diện Ứng Dụng (Light / Dark Theme)</span>
+        </div>
+
+        <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px', marginBottom: '16px' }}>
+          Tùy chọn chế độ màu sắc hiển thị phù hợp với sở thích của bạn hoặc tự động đồng bộ theo hệ thống thiết bị.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+          <div
+            className={`theme-option-card ${theme === 'light' ? 'active' : ''}`}
+            onClick={() => onSelectTheme && onSelectTheme('light')}
+          >
+            <div style={{ background: '#FEF3C7', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', color: '#D97706' }}>
+              <Sun size={24} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>Giao diện Sáng (Light)</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Tươi sáng, rực rỡ</div>
+            </div>
+          </div>
+
+          <div
+            className={`theme-option-card ${theme === 'dark' ? 'active' : ''}`}
+            onClick={() => onSelectTheme && onSelectTheme('dark')}
+          >
+            <div style={{ background: '#1E1B4B', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', color: '#818CF8' }}>
+              <Moon size={24} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>Giao diện Tối (Dark)</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Nền tối, dịu mắt</div>
+            </div>
+          </div>
+
+          <div
+            className={`theme-option-card ${theme === 'system' ? 'active' : ''}`}
+            onClick={() => onSelectTheme && onSelectTheme('system')}
+          >
+            <div style={{ background: '#E0F2FE', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', color: '#0284C7' }}>
+              <Monitor size={24} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>Tự động (System)</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Theo cài đặt thiết bị</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
 
       {/* Section 1: Default Payer Settings */}
       <div className="card">

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { ToastContainer, toast } from 'react-toastify'
-import { Plus } from 'lucide-react'
+import { Plus, Sun, Moon, Monitor } from 'lucide-react'
 import SessionForm from './components/SessionForm'
 import Sidebar from './components/Sidebar'
 import * as mongoApi from './services/mongoApi'
@@ -58,7 +58,38 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [dbStatus, setDbStatus] = useState(mongoApi.isConfigured ? 'loading' : 'offline')
   const [appSettings, setAppSettings] = useState({ defaultPayer: '' })
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('badminton_app_theme') || 'system'
+  })
   const importRef = useRef(null)
+
+  useEffect(() => {
+    const applyTheme = () => {
+      let activeTheme = theme
+      if (theme === 'system') {
+        activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      }
+      document.documentElement.setAttribute('data-theme', activeTheme)
+    }
+
+    applyTheme()
+    localStorage.setItem('badminton_app_theme', theme)
+
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+      const handleChange = () => applyTheme()
+      mediaQuery.addEventListener('change', handleChange)
+      return () => mediaQuery.removeEventListener('change', handleChange)
+    }
+  }, [theme])
+
+  const cycleTheme = useCallback(() => {
+    setTheme((prev) => {
+      if (prev === 'light') return 'dark'
+      if (prev === 'dark') return 'system'
+      return 'light'
+    })
+  }, [])
 
   // Modal states
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false)
@@ -831,6 +862,16 @@ export default function App() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+            <button
+              type="button"
+              className="theme-toggle-header-btn"
+              onClick={cycleTheme}
+              title={`Giao diện: ${theme === 'light' ? 'Sáng' : theme === 'dark' ? 'Tối' : 'Tự động (Hệ thống)'}. Click để đổi.`}
+            >
+              {theme === 'light' && <><Sun size={15} /> Sáng</>}
+              {theme === 'dark' && <><Moon size={15} /> Tối</>}
+              {theme === 'system' && <><Monitor size={15} /> Auto</>}
+            </button>
             <a href="https://github.com/nxquan/badminton-calculator" target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg> GitHub
             </a>
@@ -841,6 +882,8 @@ export default function App() {
       <div className="app-layout">
         <Sidebar
           currentView={sidebarView.view}
+          theme={theme}
+          onSelectTheme={setTheme}
           className={isSidebarOpen ? 'mobile-open' : 'collapsed'}
           onSelectMenu={(view) => { setSidebarView({ view, session: null }); setIsSidebarOpen(false) }}
         />
@@ -1000,6 +1043,8 @@ export default function App() {
               <SettingsPage
                 players={players}
                 settings={appSettings}
+                theme={theme}
+                onSelectTheme={setTheme}
                 onSaveSettings={handleSaveSettings}
                 onUpdatePlayerAvatar={(id, avatar) => {
                   const p = players.find((pl) => pl.id === id)
@@ -1268,7 +1313,7 @@ export default function App() {
           </div>
         </div>
       )}
-      <ToastContainer position="top-right" autoClose={2200} newestOnTop closeOnClick pauseOnHover theme="colored" />
+      <ToastContainer position="top-right" autoClose={2200} newestOnTop closeOnClick pauseOnHover theme={theme === 'dark' ? 'dark' : theme === 'light' ? 'light' : 'colored'} />
     </div>
   )
 }

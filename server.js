@@ -70,7 +70,16 @@ async function cleanupDuplicateSessions() {
       console.log(`🧹 Removed duplicate sessions: ${removedCount}`)
     }
 
-    await sessions.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $exists: true, $ne: null } } })
+    try {
+      await sessions.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $type: 'string' } } })
+    } catch (err) {
+      if (err.codeName === 'IndexOptionsConflict' || err.code === 85 || String(err.message).includes('Index')) {
+        await sessions.dropIndex('id_1').catch(() => {})
+        await sessions.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $type: 'string' } } })
+      } else {
+        throw err
+      }
+    }
   } catch (e) {
     console.error('Session dedupe/index setup warning:', e.message)
   }
