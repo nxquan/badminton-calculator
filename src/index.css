@@ -1438,6 +1438,265 @@ select option {
   box-shadow: 0 2px 8px rgba(22, 163, 74, 0.4);
 }
 
+/* ==========================================================================
+   Custom Datepicker Popover & Components
+   ========================================================================== */
+.date-picker-trigger:hover {
+  border-color: var(--color-court-green);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
+}
+
+.custom-datepicker-popover {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 50px -4px rgba(15, 23, 42, 0.35), 0 0 0 1px var(--border);
+  border: 1px solid var(--border);
+  z-index: 10001;
+  padding: 14px;
+  box-sizing: border-box;
+  animation: cdpFadeIn 0.15s ease-out;
+}
+
+@keyframes cdpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cdp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cdp-nav-button {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.cdp-nav-button:hover {
+  background: rgba(22, 163, 74, 0.1);
+  border-color: var(--color-court-green);
+  color: var(--color-court-green);
+}
+
+.cdp-month-year {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cdp-month-button,
+.cdp-year-button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.92rem;
+  transition: all 0.15s ease;
+}
+
+.cdp-month-button:hover,
+.cdp-year-button:hover {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.2);
+  color: var(--color-court-green);
+}
+
+.cdp-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.cdp-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cdp-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.cdp-day {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text);
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.cdp-day:hover:not(.selected) {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--color-court-green);
+}
+
+.cdp-day.empty {
+  cursor: default;
+  background: transparent;
+}
+
+.cdp-day.today:not(.selected) {
+  border-color: var(--color-court-green);
+  color: var(--color-court-green);
+  font-weight: 700;
+}
+
+.cdp-day.today::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cdp-day.selected {
+  background: var(--color-court-green) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.4);
+}
+
+.cdp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.cdp-today-button {
+  background: rgba(22, 163, 74, 0.1);
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  color: var(--color-court-green);
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cdp-today-button:hover {
+  background: var(--color-court-green);
+  color: #ffffff;
+}
+
+.cdp-close-button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cdp-close-button:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text);
+}
+
+/* Month cell in modal */
+.cdp-month-cell {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.cdp-month-cell:hover:not(.selected) {
+  background: rgba(22, 163, 74, 0.1);
+  border-color: var(--color-court-green);
+  color: var(--color-court-green);
+}
+
+.cdp-month-cell.selected {
+  background: var(--color-court-green);
+  border-color: var(--color-court-green);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Dark mode overrides for DatePicker */
+[data-theme="dark"] .custom-datepicker-popover {
+  background: #1E293B;
+  border-color: #334155;
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px #334155;
+}
+
+[data-theme="dark"] .cdp-nav-button {
+  background: #0F172A;
+  border-color: #334155;
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .cdp-close-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .cdp-month-cell {
+  background: #0F172A;
+  border-color: #334155;
+  color: #F8FAFC;
+}
+
 /* Responsive Media Queries */
 @media (max-width: 755px) {
   .app {

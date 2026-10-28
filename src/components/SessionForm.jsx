@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
+import { Calendar } from 'lucide-react'
 import { PLAYERS, DEFAULT_PAYER, formatMoney, calculateTotals, getEntryLabel, sortExpenseTypes, sortPlayerNames, shouldResetPeopleSelection } from '../constants'
 import PlayerAvatar from './PlayerAvatar'
 import QuickBatchForm from './QuickBatchForm'
@@ -1001,6 +1002,471 @@ function EditEntryForm({ entry, players = [], expenseTypes, combos = [], badmint
   )
 }
 
+function formatDisplayDate(iso) {
+  if (!iso) return ''
+  try {
+    const [y, m, d] = String(iso).split('-')
+    if (!d || !m || !y) return iso
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
+  } catch (e) {
+    return iso
+  }
+}
+
+function DateField({ id, value, onChange }) {
+  const inputRef = useRef(null)
+  const wrapperRef = useRef(null)
+  const popoverRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(() => (value ? Number(String(value).slice(0, 4)) : new Date().getFullYear()))
+  const [viewMonth, setViewMonth] = useState(() => (value ? Number(String(value).slice(5, 7)) - 1 : new Date().getMonth()))
+  const [showMonthModal, setShowMonthModal] = useState(false)
+  const [showYearModal, setShowYearModal] = useState(false)
+
+  const getPopoverPos = useCallback(() => {
+    if (!wrapperRef.current) return { top: 0, left: 0 }
+    const rect = wrapperRef.current.getBoundingClientRect()
+    const popoverWidth = 320
+    const vw = window.innerWidth || document.documentElement.clientWidth || 360
+    let left = rect.left
+    if (left + popoverWidth > vw - 12) {
+      left = Math.max(12, vw - popoverWidth - 12)
+    }
+    const popoverHeight = 360
+    let top = rect.bottom + 6
+    if (top + popoverHeight > window.innerHeight && rect.top - popoverHeight - 6 > 0) {
+      top = rect.top - popoverHeight - 6
+    }
+    return { top, left }
+  }, [])
+
+  const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 })
+
+  const updatePosition = useCallback(() => {
+    setPopoverPos(getPopoverPos())
+  }, [getPopoverPos])
+
+  const toggleOpen = () => {
+    setOpen((prev) => {
+      const next = !prev
+      if (next) {
+        setPopoverPos(getPopoverPos())
+      }
+      return next
+    })
+  }
+
+  useEffect(() => {
+    if (value && /^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+      setViewYear(Number(String(value).slice(0, 4)))
+      setViewMonth(Number(String(value).slice(5, 7)) - 1)
+    }
+  }, [value])
+
+  useEffect(() => {
+    if (!open) return
+    updatePosition()
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [open, updatePosition])
+
+  useEffect(() => {
+    if (!open) return
+
+    const onMouseDown = (e) => {
+      if (wrapperRef.current && wrapperRef.current.contains(e.target)) return
+      if (popoverRef.current && popoverRef.current.contains(e.target)) return
+      if (e.target && e.target.closest && (e.target.closest('.cdp-month-modal') || e.target.closest('.cdp-year-modal'))) return
+      setOpen(false)
+    }
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  const changeMonth = (delta) => {
+    let m = viewMonth + delta
+    let y = viewYear
+    if (m < 0) {
+      m = 11
+      y -= 1
+    } else if (m > 11) {
+      m = 0
+      y += 1
+    }
+    setViewMonth(m)
+    setViewYear(y)
+  }
+
+  const selectDay = (d) => {
+    const mm = String(viewMonth + 1).padStart(2, '0')
+    const dd = String(d).padStart(2, '0')
+    const iso = `${viewYear}-${mm}-${dd}`
+    onChange(iso)
+    setOpen(false)
+  }
+
+  const selectToday = () => {
+    const today = new Date()
+    const y = today.getFullYear()
+    const m = String(today.getMonth() + 1).padStart(2, '0')
+    const d = String(today.getDate()).padStart(2, '0')
+    onChange(`${y}-${m}-${d}`)
+    setViewYear(y)
+    setViewMonth(today.getMonth())
+    setOpen(false)
+  }
+
+  const buildDays = (y, m) => {
+    const first = new Date(y, m, 1)
+    const firstWeekday = (first.getDay() + 6) % 7
+    const daysInMonth = new Date(y, m + 1, 0).getDate()
+    const cells = []
+    for (let i = 0; i < firstWeekday; i++) cells.push(null)
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+    while (cells.length % 7 !== 0) cells.push(null)
+    const weeks = []
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+    return weeks
+  }
+
+  const weeks = buildDays(viewYear, viewMonth)
+
+  const monthNames = [
+    'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+    'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+  ]
+
+  return (
+    <div className="form-group" style={{ position: 'relative', display: 'inline-block' }} ref={wrapperRef}>
+      <label
+        htmlFor={id}
+        style={{ display: 'block', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}
+        onClick={(e) => {
+          e.preventDefault()
+          toggleOpen()
+        }}
+      >
+        Ngày đánh
+      </label>
+      <div
+        onClick={toggleOpen}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            toggleOpen()
+          }
+        }}
+        className="date-picker-trigger"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '10px 14px',
+          borderRadius: 'var(--radius)',
+          border: open ? '1.5px solid var(--color-court-green)' : '1.5px solid var(--border)',
+          background: 'var(--card-bg)',
+          minWidth: '170px',
+          cursor: 'pointer',
+          position: 'relative',
+          boxShadow: open ? '0 0 0 3px rgba(22, 163, 74, 0.15)' : 'var(--shadow)',
+          transition: 'all 0.2s ease',
+          userSelect: 'none'
+        }}
+      >
+        <span style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text)' }}>
+          {formatDisplayDate(value) || 'Chọn ngày'}
+        </span>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: 'var(--color-court-green)' }}>
+          <Calendar size={18} />
+        </span>
+
+        <input
+          ref={inputRef}
+          id={id}
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            position: 'absolute',
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 0,
+            height: 0,
+          }}
+          aria-label="Chọn ngày đánh"
+          tabIndex={-1}
+        />
+      </div>
+
+      {open && createPortal(
+        <div
+          ref={popoverRef}
+          className="custom-datepicker-popover"
+          role="dialog"
+          aria-modal="true"
+          style={{ top: `${popoverPos.top}px`, left: `${popoverPos.left}px` }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="cdp-header">
+            <button
+              type="button"
+              className="cdp-nav-button"
+              onClick={(e) => {
+                e.stopPropagation()
+                changeMonth(-1)
+              }}
+              title="Tháng trước"
+              aria-label="Tháng trước"
+            >
+              ‹
+            </button>
+            <div className="cdp-month-year">
+              <button
+                type="button"
+                className="cdp-month-button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowMonthModal(true)
+                }}
+              >
+                <strong>{monthNames[viewMonth]}</strong>
+              </button>
+              <button
+                type="button"
+                className="cdp-year-button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowYearModal(true)
+                }}
+              >
+                <div className="cdp-year">{viewYear}</div>
+              </button>
+            </div>
+            <button
+              type="button"
+              className="cdp-nav-button"
+              onClick={(e) => {
+                e.stopPropagation()
+                changeMonth(1)
+              }}
+              title="Tháng sau"
+              aria-label="Tháng sau"
+            >
+              ›
+            </button>
+          </div>
+
+          <div className="cdp-weekdays">
+            <div>T2</div>
+            <div>T3</div>
+            <div>T4</div>
+            <div>T5</div>
+            <div>T6</div>
+            <div>T7</div>
+            <div>CN</div>
+          </div>
+
+          <div className="cdp-grid">
+            {weeks.map((week, wi) => (
+              <div className="cdp-week" key={wi}>
+                {week.map((d, di) => {
+                  if (!d) {
+                    return <div key={di} className="cdp-day empty" />
+                  }
+                  const todayStr = new Date().toISOString().slice(0, 10)
+                  const cellStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                  const isToday = todayStr === cellStr
+                  const selected = value === cellStr
+                  return (
+                    <button
+                      key={di}
+                      type="button"
+                      className={`cdp-day ${isToday ? 'today' : ''} ${selected ? 'selected' : ''}`}
+                      onClick={() => selectDay(d)}
+                    >
+                      {d}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+
+          <div className="cdp-footer">
+            <button
+              type="button"
+              className="cdp-today-button"
+              onClick={(e) => {
+                e.stopPropagation()
+                selectToday()
+              }}
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              className="cdp-close-button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+              }}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showMonthModal && createPortal(
+        <div
+          className="cdp-month-modal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10005,
+            padding: 16
+          }}
+          onClick={() => setShowMonthModal(false)}
+        >
+          <div
+            className="card"
+            style={{ width: '100%', maxWidth: '380px', padding: 18 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="card-title" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
+              <span>📅 Chọn tháng</span>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowMonthModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, padding: '4px 0' }}>
+              {monthNames.map((m, idx) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={`cdp-month-cell ${idx === viewMonth ? 'selected' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setViewMonth(idx)
+                    setShowMonthModal(false)
+                  }}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showYearModal && createPortal(
+        <div
+          className="cdp-year-modal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10005,
+            padding: 16
+          }}
+          onClick={() => setShowYearModal(false)}
+        >
+          <div
+            className="card"
+            style={{ width: '100%', maxWidth: '320px', padding: 18 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="card-title" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
+              <span>📅 Chọn năm</span>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowYearModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center', padding: '12px 0' }}>
+              <button
+                type="button"
+                className="cdp-nav-button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setViewYear((y) => y - 1)
+                }}
+              >
+                -
+              </button>
+              <input
+                type="number"
+                value={viewYear}
+                onChange={(e) => setViewYear(Number(e.target.value) || viewYear)}
+                style={{ width: 110, textAlign: 'center', fontSize: '1.1rem', fontWeight: 700 }}
+              />
+              <button
+                type="button"
+                className="cdp-nav-button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setViewYear((y) => y + 1)
+                }}
+              >
+                +
+              </button>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+                onClick={() => setShowYearModal(false)}
+              >
+                Xong
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 export default function SessionForm({ session, defaultPayer, players = [], expenseTypes, combos = [], onAddPlayerName, onAddExpenseType, onSave, onCancel }) {
   const [date, setDate] = useState(session.date || new Date().toISOString().split('T')[0])
   const dateInputId = useId()
@@ -1149,284 +1615,6 @@ export default function SessionForm({ session, defaultPayer, players = [], expen
     })
     return Object.entries(groups).map(([type, items]) => ({ type, items }))
   }, [sortedEntries])
-
-  function formatDisplayDate(iso) {
-    if (!iso) return ''
-    try {
-      const [y, m, d] = String(iso).split('-')
-      if (!d || !m || !y) return iso
-      // const yy = String(y).slice(2)
-      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
-    } catch (e) {
-      return iso
-    }
-  }
-
-  function DateField({ id, value, onChange }) {
-    const inputRef = useRef(null)
-    const wrapperRef = useRef(null)
-    const [open, setOpen] = useState(false)
-    const [viewYear, setViewYear] = useState(() => (value ? Number(String(value).slice(0,4)) : new Date().getFullYear()))
-    const [viewMonth, setViewMonth] = useState(() => (value ? Number(String(value).slice(5,7)) - 1 : new Date().getMonth()))
-
-    useEffect(() => {
-      const onDocClick = (e) => {
-        if (!wrapperRef.current) return
-        // If click is inside the launcher, keep open
-        if (wrapperRef.current.contains(e.target)) return
-        // If click is inside the portaled popover, keep open
-        if (e.target && e.target.closest && e.target.closest('.custom-datepicker-popover')) return
-        // If click is inside month/year modal, keep open
-        if (e.target && e.target.closest && (e.target.closest('.cdp-month-modal') || e.target.closest('.cdp-year-modal'))) return
-        setOpen(false)
-      }
-      document.addEventListener('click', onDocClick)
-      return () => document.removeEventListener('click', onDocClick)
-    }, [])
-
-    useEffect(() => {
-      if (value) {
-        setViewYear(Number(String(value).slice(0,4)))
-        setViewMonth(Number(String(value).slice(5,7)) - 1)
-      }
-    }, [value])
-
-    const [popoverStyle, setPopoverStyle] = useState(null)
-    const [pickerMode, setPickerMode] = useState('calendar') // 'calendar' | 'months' | 'year'
-
-    const openPicker = () => setOpen((s) => !s)
-
-    // compute popover position when opened
-    useEffect(() => {
-      if (!open) {
-        setPopoverStyle(null)
-        setPickerMode('calendar')
-        return
-      }
-      if (!wrapperRef.current) return
-      const rect = wrapperRef.current.getBoundingClientRect()
-      const top = rect.bottom + window.scrollY + 8
-      const left = rect.left + window.scrollX
-      // ensure popover stays within viewport horizontally
-      const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0)
-      const popoverWidth = 360
-      let adjustedLeft = left
-      if (left + popoverWidth > vw - 12) {
-        adjustedLeft = Math.max(12, vw - popoverWidth - 12)
-      }
-      setPopoverStyle({ position: 'absolute', top: `${top}px`, left: `${adjustedLeft}px`, width: `${popoverWidth}px` })
-    }, [open, viewMonth, viewYear])
-
-    const [showMonthModal, setShowMonthModal] = useState(false)
-    const [showYearModal, setShowYearModal] = useState(false)
-
-    const changeMonth = (delta) => {
-      let m = viewMonth + delta
-      let y = viewYear
-      if (m < 0) { m = 11; y -= 1 }
-      if (m > 11) { m = 0; y += 1 }
-      setViewMonth(m); setViewYear(y)
-    }
-
-    const selectDay = (d) => {
-      const mm = String(viewMonth + 1).padStart(2, '0')
-      const dd = String(d).padStart(2, '0')
-      const iso = `${viewYear}-${mm}-${dd}`
-      onChange(iso)
-      setOpen(false)
-    }
-
-    const buildDays = (y, m) => {
-      const first = new Date(y, m, 1)
-      // map Monday=0
-      const firstWeekday = (first.getDay() + 6) % 7
-      const daysInMonth = new Date(y, m + 1, 0).getDate()
-      const cells = []
-      for (let i = 0; i < firstWeekday; i++) cells.push(null)
-      for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-      // pad to full weeks
-      while (cells.length % 7 !== 0) cells.push(null)
-      const weeks = []
-      for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-      return weeks
-    }
-
-    const weeks = buildDays(viewYear, viewMonth)
-
-    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
-
-    return (
-      <div className="form-group" style={{ position: 'relative', display: 'inline-block' }} ref={wrapperRef}>
-        <label htmlFor={id} style={{ display: 'block', cursor: 'pointer' }}>Ngày đánh</label>
-        <div
-          onClick={openPicker}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker() } }}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            border: '1px solid var(--border)',
-            background: 'var(--card-bg)',
-            minWidth: '160px',
-            cursor: 'pointer',
-            position: 'relative',
-            boxShadow: 'var(--shadow)'
-          }}
-        >
-          <span style={{ fontSize: '0.95rem' }}>{formatDisplayDate(value) || 'Chọn ngày'}</span>
-          <span style={{ marginLeft: 'auto', opacity: 0.8 }}>📅</span>
-
-          <input
-            ref={inputRef}
-            id={id}
-            type="date"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              opacity: 0,
-              border: 'none',
-              padding: 0,
-              margin: 0,
-              cursor: 'default',
-              pointerEvents: 'none',
-              zIndex: 0,
-              background: 'transparent',
-            }}
-            aria-label="Chọn ngày"
-          />
-
-          {open && popoverStyle && createPortal(
-            <div
-              className="custom-datepicker-popover"
-              role="dialog"
-              aria-modal="true"
-              style={popoverStyle}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="cdp-header">
-                <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); changeMonth(-1) }}>‹</button>
-                <div className="cdp-month-year">
-                  <button type="button" className="cdp-month-button" onClick={(e) => { e.stopPropagation(); setShowMonthModal(true) }}>
-                    <strong>{monthNames[viewMonth]}</strong>
-                  </button>
-                  <button type="button" className="cdp-year-button" onClick={(e) => { e.stopPropagation(); setShowYearModal(true) }}>
-                    <div className="cdp-year">{viewYear}</div>
-                  </button>
-                </div>
-                <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); changeMonth(1) }}>›</button>
-              </div>
-              {pickerMode === 'calendar' && (
-                <>
-                  <div className="cdp-weekdays">
-                    <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div>
-                  </div>
-                  <div className="cdp-grid">
-                    {weeks.map((week, wi) => (
-                      <div className="cdp-week" key={wi}>
-                        {week.map((d, di) => {
-                          const isToday = d && new Date().toISOString().slice(0,10) === `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-                          const selected = d && value === `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-                          return (
-                            <button
-                              key={di}
-                              type="button"
-                              className={`cdp-day ${d ? '' : 'empty'} ${isToday ? 'today' : ''} ${selected ? 'selected' : ''}`}
-                              onClick={() => d && selectDay(d)}
-                              disabled={!d}
-                            >
-                              {d || ''}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {pickerMode === 'months' && (
-                <div className="cdp-months-grid">
-                  {monthNames.map((m, idx) => (
-                    <button
-                      key={m}
-                      type="button"
-                      className={`cdp-month ${idx === viewMonth ? 'selected' : ''}`}
-                      onClick={(e) => { e.stopPropagation(); setViewMonth(idx); setPickerMode('calendar') }}
-                    >
-                      {m.slice(0,3)}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {pickerMode === 'year' && (
-                <div className="cdp-year-picker">
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
-                    <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y - 1) }}>-</button>
-                    <input
-                      type="number"
-                      value={viewYear}
-                      onChange={(e) => setViewYear(Number(e.target.value) || viewYear)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setPickerMode('calendar') } }}
-                      onBlur={() => setPickerMode('calendar')}
-                      style={{ width: 80, textAlign: 'center' }}
-                    />
-                    <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y + 1) }}>+</button>
-                  </div>
-                </div>
-              )}
-            </div>,
-            document.body
-          )}
-          {showMonthModal && createPortal(
-            <div className="cdp-month-modal" style={{position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1400}} onClick={() => setShowMonthModal(false)}>
-              <div className="card" style={{ width: '100%', maxWidth: '420px', padding: 12 }} onClick={(e) => e.stopPropagation()}>
-                <div className="card-title" style={{ justifyContent: 'space-between' }}>
-                  <span>Chọn tháng</span>
-                  <button className="btn btn-outline btn-sm" onClick={() => setShowMonthModal(false)}>Đóng</button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '8px 4px' }}>
-                  {monthNames.map((m, idx) => (
-                    <button key={m} type="button" className={`cdp-month ${idx === viewMonth ? 'selected' : ''}`} onClick={(e) => { e.stopPropagation(); setViewMonth(idx); setShowMonthModal(false) }}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>, document.body
-          )}
-
-          {showYearModal && createPortal(
-            <div className="cdp-year-modal" style={{position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1400}} onClick={() => setShowYearModal(false)}>
-              <div className="card" style={{ width: '100%', maxWidth: '320px', padding: 12 }} onClick={(e) => e.stopPropagation()}>
-                <div className="card-title" style={{ justifyContent: 'space-between' }}>
-                  <span>Chọn năm</span>
-                  <button className="btn btn-outline btn-sm" onClick={() => setShowYearModal(false)}>Đóng</button>
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', padding: '8px 4px' }}>
-                  <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y - 1) }}>-</button>
-                  <input type="number" value={viewYear} onChange={(e) => setViewYear(Number(e.target.value) || viewYear)} style={{ width: 100, textAlign: 'center' }} />
-                  <button type="button" className="cdp-nav-button" onClick={(e) => { e.stopPropagation(); setViewYear((y) => y + 1) }}>+</button>
-                </div>
-                <div style={{ textAlign: 'center', marginTop: 8 }}>
-                  <button className="btn btn-primary" onClick={() => setShowYearModal(false)}>OK</button>
-                </div>
-              </div>
-            </div>, document.body
-          )}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div>
