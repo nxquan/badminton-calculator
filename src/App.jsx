@@ -17,6 +17,7 @@ import StatsPage from './pages/StatsPage'
 import EmptyPage from './pages/EmptyPage'
 import ComboConfigPage from './pages/ComboConfigPage'
 import SettingsPage from './pages/SettingsPage'
+import RoomExpensesPage from './pages/RoomExpensesPage'
 import { getRandomCartoonAvatarUrl } from './utils/avatarUtils'
 
 const EXPENSE_EMOJI_CATEGORIES = [
@@ -51,6 +52,14 @@ export default function App() {
   const [players, setPlayers] = useState([]) // array of { id, name }
   const [expenseTypes, setExpenseTypes] = useState(DEFAULT_EXPENSE_TYPES)
   const [combos, setCombos] = useState(() => loadCombos())
+  const [roomExpenses, setRoomExpenses] = useState(() => {
+    try {
+      const raw = localStorage.getItem('badminton_room_expenses')
+      return raw ? JSON.parse(raw) : []
+    } catch {
+      return []
+    }
+  })
   const [currentSession, setCurrentSession] = useState(null)
   const [viewingSession, setViewingSession] = useState(null)
   const [activeTab, setActiveTab] = useState('history')
@@ -372,10 +381,17 @@ export default function App() {
       mongoApi.getAllExpenseTypes(),
       mongoApi.getAllCombos(),
       mongoApi.getSettings(),
+      mongoApi.getAllRoomExpenses(),
     ])
-      .then(async ([sessionsResult, playersResult, typesResult, combosResult, settingsResult]) => {
+      .then(async ([sessionsResult, playersResult, typesResult, combosResult, settingsResult, roomExpensesResult]) => {
         if (settingsResult.status === 'fulfilled' && settingsResult.value) {
           setAppSettings(settingsResult.value)
+        }
+        if (roomExpensesResult && roomExpensesResult.status === 'fulfilled' && Array.isArray(roomExpensesResult.value)) {
+          setRoomExpenses(roomExpensesResult.value)
+          try {
+            localStorage.setItem('badminton_room_expenses', JSON.stringify(roomExpensesResult.value))
+          } catch (_) {}
         }
         if (sessionsResult.status === 'rejected') toast.error(getErrorMessage(sessionsResult.reason, 'Không thể tải danh sách phiên'))
         if (playersResult.status === 'rejected') toast.error(getErrorMessage(playersResult.reason, 'Không thể tải danh sách người chơi'))
@@ -511,6 +527,51 @@ export default function App() {
       )
     }
   }, [extractNamesFromSession, normalizeSessionForStorage, players, runToastMutation, syncPlayersForNames])
+
+  const handleSaveRoomExpense = useCallback((roomExpense) => {
+    setRoomExpenses((prev) => {
+      const isExisting = prev.some((item) => item.id === roomExpense.id)
+      const next = isExisting
+        ? prev.map((item) => (item.id === roomExpense.id ? roomExpense : item))
+        : [roomExpense, ...prev]
+      try {
+        localStorage.setItem('badminton_room_expenses', JSON.stringify(next))
+      } catch (_) {}
+      return next
+    })
+
+    if (mongoApi.isConfigured) {
+      void runToastMutation(
+        mongoApi.insertRoomExpense(roomExpense),
+        {
+          pending: 'Đang lưu phiên chi phí trọ...',
+          success: 'Đã lưu phiên chi phí trọ',
+          error: 'Không thể lưu phiên chi phí trọ lên server',
+        }
+      )
+    }
+  }, [runToastMutation])
+
+  const handleDeleteRoomExpense = useCallback((id) => {
+    setRoomExpenses((prev) => {
+      const next = prev.filter((item) => item.id !== id)
+      try {
+        localStorage.setItem('badminton_room_expenses', JSON.stringify(next))
+      } catch (_) {}
+      return next
+    })
+
+    if (mongoApi.isConfigured) {
+      void runToastMutation(
+        mongoApi.removeRoomExpense(id),
+        {
+          pending: 'Đang xoá phiên chi phí trọ...',
+          success: 'Đã xoá phiên chi phí trọ',
+          error: 'Không thể xoá phiên chi phí trọ',
+        }
+      )
+    }
+  }, [runToastMutation])
 
   const handleNewSession = useCallback(() => {
     setNewSessionDate(new Date().toISOString().split('T')[0])
@@ -929,6 +990,13 @@ export default function App() {
                 onNavigateTab={(view) => setSidebarView({ view, session: null })}
               />
             )}
+            {sidebarView.view === 'room-expenses' && (
+              <RoomExpensesPage
+                roomExpenses={roomExpenses}
+                onSaveRoomExpense={handleSaveRoomExpense}
+                onDeleteRoomExpense={handleDeleteRoomExpense}
+              />
+            )}
             {sidebarView.view === 'sessions' && (
               <SessionsPage
                 sessions={sessions}
@@ -1082,7 +1150,7 @@ export default function App() {
                 onBulkUpdateAvatars={handleBulkRandomizeAvatars}
               />
             )}
-            {!['home', 'sessions', 'match-history', 'session', 'players', 'types', 'stats', 'settings', 'combo-T3', 'combo-T7'].includes(sidebarView.view) && (
+            {!['home', 'sessions', 'match-history', 'session', 'players', 'types', 'stats', 'settings', 'combo-T3', 'combo-T7', 'room-expenses'].includes(sidebarView.view) && (
               <EmptyPage />
             )}
           </div>

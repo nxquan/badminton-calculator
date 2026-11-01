@@ -21,6 +21,7 @@ const players = db.collection('players')
 const expenseTypes = db.collection('expense_types')
 const combos = db.collection('combos')
 const settings = db.collection('settings')
+const roomExpenses = db.collection('room_expenses')
 
 let isDbConnected = false
 
@@ -69,6 +70,10 @@ async function cleanupDuplicateSessions() {
     if (removedCount > 0) {
       console.log(`🧹 Removed duplicate sessions: ${removedCount}`)
     }
+
+    try {
+      await roomExpenses.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $type: 'string' } } })
+    } catch (_) {}
 
     try {
       await sessions.createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $type: 'string' } } })
@@ -618,6 +623,73 @@ app.put('/api/settings', async (req, res) => {
       { upsert: true }
     )
     res.json({ ok: true, settings: updateDoc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Room Expenses API (Chi phí phòng trọ) ───────────────────
+// Lấy danh sách các phiên chi phí trọ
+app.get('/api/room-expenses', async (req, res) => {
+  try {
+    const docs = await roomExpenses.find({}).sort({ month: -1, createdAt: -1 }).toArray()
+    res.json(docs.map(({ _id, ...rest }) => rest))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Tạo hoặc cập nhật phiên chi phí trọ
+app.post('/api/room-expenses', async (req, res) => {
+  try {
+    const data = req.body
+    if (!data || !data.id) {
+      return res.status(400).json({ error: 'Session id is required' })
+    }
+    const doc = {
+      ...data,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    await roomExpenses.updateOne(
+      { id: doc.id },
+      { $set: doc },
+      { upsert: true }
+    )
+    res.json({ ok: true, session: doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Cập nhật phiên chi phí trọ theo id
+app.put('/api/room-expenses/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const data = req.body
+    const doc = {
+      ...data,
+      id,
+      updatedAt: new Date().toISOString(),
+    }
+    delete doc._id
+    await roomExpenses.updateOne(
+      { id },
+      { $set: doc },
+      { upsert: true }
+    )
+    res.json({ ok: true, session: doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Xóa phiên chi phí trọ theo id
+app.delete('/api/room-expenses/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await roomExpenses.deleteOne({ id })
+    res.json({ ok: true, deletedCount: result.deletedCount })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

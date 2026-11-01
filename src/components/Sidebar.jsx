@@ -1,5 +1,5 @@
 import React from 'react'
-import { Home, Calendar, Trophy, Users, UserCheck, CreditCard, BarChart3, Settings, Sun, Moon, Monitor } from 'lucide-react'
+import { Home, Calendar, Trophy, Users, UserCheck, CreditCard, BarChart3, Settings, Sun, Moon, Monitor, Building2 } from 'lucide-react'
 
 export default function Sidebar({ onSelectMenu, currentView = 'sessions', theme = 'system', onSelectTheme, className = '' }) {
   return (
@@ -10,6 +10,15 @@ export default function Sidebar({ onSelectMenu, currentView = 'sessions', theme 
           onClick={() => onSelectMenu && onSelectMenu('home')}
         >
           <Home size={18} /> Trang chủ
+        </button>
+      </div>
+
+      <div className="sidebar-section">
+        <button
+          className={`sidebar-menu-btn ${currentView === 'room-expenses' ? 'active' : ''}`}
+          onClick={() => onSelectMenu && onSelectMenu('room-expenses')}
+        >
+          <Building2 size={18} /> Chi phí trọ
         </button>
       </div>
 

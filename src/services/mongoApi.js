@@ -122,3 +122,20 @@ export async function updateSettings(data) {
   return api('PUT', '/settings', data)
 }
 
+/** Room Expenses APIs (Chi phí phòng trọ Quân AP & Trí Trần) */
+export async function getAllRoomExpenses() {
+  return api('GET', '/room-expenses')
+}
+
+export async function insertRoomExpense(expense) {
+  return api('POST', '/room-expenses', expense)
+}
+
+export async function updateRoomExpense(expense) {
+  return api('PUT', `/room-expenses/${encodeURIComponent(expense.id)}`, expense)
+}
+
+export async function removeRoomExpense(id) {
+  return api('DELETE', `/room-expenses/${encodeURIComponent(id)}`)
+}
+

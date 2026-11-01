@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Calendar, Wallet, Users, Flame, BarChart3, ArrowRight, Search, ChevronDown, ChevronUp, PieChart } from 'lucide-react'
+import { Plus, Calendar, Wallet, Users, Flame, BarChart3, ArrowRight, Search, ChevronDown, ChevronUp, PieChart, Building2 } from 'lucide-react'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -301,9 +301,29 @@ export default function HomePage({ sessions = [], players = [], expenseTypes = [
               Theo dõi phiên cầu, chi tiêu & phong độ vận động viên.
             </p>
           </div>
-          <button className="btn btn-add" onClick={onNewSession} style={{ padding: '11px 20px', fontSize: '0.95rem' }}>
-            <Plus size={18} /> Tạo phiên mới
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {onNavigateTab && (
+              <button
+                className="btn btn-outline"
+                onClick={() => onNavigateTab('room-expenses')}
+                style={{
+                  padding: '11px 18px',
+                  fontSize: '0.92rem',
+                  color: '#FFFFFF',
+                  borderColor: 'rgba(255,255,255,0.4)',
+                  background: 'rgba(255,255,255,0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Building2 size={18} /> Chi phí trọ (Quân & Trí)
+              </button>
+            )}
+            <button className="btn btn-add" onClick={onNewSession} style={{ padding: '11px 20px', fontSize: '0.95rem' }}>
+              <Plus size={18} /> Tạo phiên mới
+            </button>
+          </div>
         </div>
       </div>
 
